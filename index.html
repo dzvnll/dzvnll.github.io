@@ -4,12 +4,15 @@
 <meta charset="UTF-8">
 <title>DEAD HALLS: PORTABLE</title>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
+  * { margin:0; padding:0; box-sizing:border-box; user-select: none; }
   html, body { width:100%; height:100%; overflow:hidden; background:#000; }
   
-  /* Forces the canvas to upscale with crisp, chunky pixels instead of blurring */
+  /* Forces the canvas to upscale with crisp, chunky pixels */
   canvas { 
-    display:block; 
+    display: block; 
+    width: 100vw !important; 
+    height: 100vh !important;
+    object-fit: fill;
     image-rendering: -moz-crisp-edges;
     image-rendering: -webkit-optimize-contrast;
     image-rendering: crisp-edges;
@@ -25,362 +28,339 @@
 
   .hud-text {
     position: absolute;
-    color: #ff2222;
     text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
   }
 
-  #round { bottom: 20px; left: 20px; font-size: 48px; color: #fff; }
-  #points { bottom: 20px; right: 20px; font-size: 32px; color: #ffca28; }
-  #ammo { bottom: 60px; right: 20px; font-size: 24px; color: #fff; }
+  #round { bottom: 25px; left: 30px; font-size: 54px; color: #d00; }
+  #points { bottom: 25px; right: 30px; font-size: 36px; color: #ffca28; }
+  #ammo { bottom: 70px; right: 30px; font-size: 28px; color: #fff; }
 
   #crosshair {
     position:fixed; top:50%; left:50%; width: 4px; height: 4px;
-    background: #fff;
+    background: rgba(255,255,255,0.7);
     transform:translate(-50%,-50%); z-index:15; pointer-events:none;
   }
 
   #lookTip {
     position:fixed; top:20px; left:50%; transform:translateX(-50%);
     color:#fff; font-size:16px; background:rgba(0,0,0,0.8);
-    padding:8px 12px; z-index:15;
+    padding:10px 16px; z-index:15;
     font-family: 'Courier New', Courier, monospace;
-    border: 2px solid #555; transition: opacity 0.3s;
+    border: 2px solid #444; text-align: center;
   }
-  #lookTip.hide { opacity:0; }
+  #lookTip.hide { display: none; }
 </style>
 </head>
 <body>
 
 <div id="hud">
-  <div class="hud-text" id="round"><span style="color:#d00;">|||</span></div>
+  <div class="hud-text" id="round">|||</div>
   <div class="hud-text" id="points">500</div>
-  <div class="hud-text" id="ammo">8 / 32</div>
+  <div class="hud-text" id="ammo"><span id="ammoCurrent">8</span> / <span style="color:#aaa">32</span></div>
 </div>
 
-<div id="lookTip">CLICK TO LOCK MOUSE<br>WASD to Move</div>
+<div id="lookTip">CLICK TO LOCK MOUSE<br><br>WASD to Move &nbsp;&middot;&nbsp; Click to Shoot</div>
 <div id="crosshair"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // ------------------------------------------------------------------
-// SETUP (RETRO QUAKE / PS1 STYLE ENGINE)
+// CORE ENGINE SETUP
 // ------------------------------------------------------------------
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0c10);
-// Dark, heavy fog to hide the end of the courtyard and add PS1-era atmosphere
-scene.fog = new THREE.Fog(0x0a0c10, 2, 25); 
+scene.background = new THREE.Color(0x0a0a0c);
+scene.fog = new THREE.Fog(0x0a0a0c, 3, 30); // Gives that classic PS1/N64 draw distance fade
 
-const camera = new THREE.PerspectiveCamera(90, window.innerWidth/window.innerHeight, 0.05, 100);
+const camera = new THREE.PerspectiveCamera(85, window.innerWidth/window.innerHeight, 0.1, 100);
 camera.rotation.order = 'YXZ';
 camera.position.set(0, 1.6, 2);
 
-// LOW_RES_SCALE crushes the resolution to create the chunky Quake/NZP look
-const LOW_RES_SCALE = 0.33; 
-
-const renderer = new THREE.WebGLRenderer({ antialias:false, powerPreference:'low-power' });
+// Render at 50% resolution, then let CSS scale it up (pixelated)
+const RES_SCALE = 0.5; 
+const renderer = new THREE.WebGLRenderer({ antialias: false });
 renderer.setPixelRatio(1);
-// Disable tone mapping to keep lighting raw, harsh, and retro
+// Basic linear encoding, no tone mapping, for raw retro colors
 renderer.outputEncoding = THREE.LinearEncoding; 
-renderer.toneMapping = THREE.NoToneMapping;
 
 document.body.appendChild(renderer.domElement);
-renderer.domElement.style.width = '100%';
-renderer.domElement.style.height = '100%';
 
-function resizeRenderer(){
-  const w = Math.floor(window.innerWidth * LOW_RES_SCALE);
-  const h = Math.floor(window.innerHeight * LOW_RES_SCALE);
-  renderer.setSize(w, h, false);
-  camera.aspect = window.innerWidth/window.innerHeight;
+function resize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  // Set internal canvas size lower, CSS stretches it to 100vw/100vh
+  renderer.setSize(w * RES_SCALE, h * RES_SCALE, false);
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
-resizeRenderer();
-window.addEventListener('resize', resizeRenderer);
+window.addEventListener('resize', resize);
+resize();
 
 // ------------------------------------------------------------------
-// PIXELATED RETRO TEXTURES
+// RETRO TEXTURE GENERATOR
 // ------------------------------------------------------------------
-// Generates harsh, low-res (64x64) textures typical of 90s shooters
-function makeRetroTex(type) {
-  const size = 64;
+function createRetroTexture(type) {
   const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
+  const size = 64; 
+  canvas.width = size; canvas.height = size;
   const ctx = canvas.getContext('2d');
 
-  if (type === 'wall') ctx.fillStyle = '#444';
-  if (type === 'wall2') ctx.fillStyle = '#3a2d2d';
-  if (type === 'floor') ctx.fillStyle = '#222';
-  if (type === 'dirt') ctx.fillStyle = '#1c1612';
-  ctx.fillRect(0,0,size,size);
-
-  // Chunky pixel noise
-  for(let i=0; i<400; i++) {
-    let v = Math.random();
-    ctx.fillStyle = v > 0.5 ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.15)';
-    let sz = v > 0.8 ? 4 : 2; 
-    let x = Math.floor(Math.random()*(size/sz))*sz;
-    let y = Math.floor(Math.random()*(size/sz))*sz;
-    ctx.fillRect(x,y,sz,sz);
-  }
-
-  // Draw chunky panel/tile outlines
-  if (type === 'wall' || type === 'wall2') {
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  if (type === 'brick') {
+    ctx.fillStyle = '#4a4036'; ctx.fillRect(0,0,size,size);
+    ctx.fillStyle = '#302820'; // Mortar
+    ctx.fillRect(0, 30, size, 4);
+    ctx.fillRect(30, 0, 4, 30);
+    ctx.fillRect(60, 34, 4, 30);
+  } else if (type === 'tile') {
+    ctx.fillStyle = '#222'; ctx.fillRect(0,0,size,size);
+    ctx.fillStyle = '#111'; // Grout
     ctx.fillRect(0, 0, size, 2);
     ctx.fillRect(0, 0, 2, size);
-    ctx.fillStyle = 'rgba(255,255,255,0.1)';
-    ctx.fillRect(0, size-2, size, 2);
-    ctx.fillRect(size-2, 0, 2, size);
-  } else if (type === 'floor') {
-    ctx.fillStyle = 'rgba(0,0,0,0.9)';
-    ctx.fillRect(0, 0, size, 2);
-    ctx.fillRect(0, 32, size, 2);
-    ctx.fillRect(0, 0, 2, size);
-    ctx.fillRect(32, 0, 2, size);
+    ctx.fillStyle = '#333'; // Highlight
+    ctx.fillRect(2, 2, size-4, 2);
+  } else if (type === 'dirt') {
+    ctx.fillStyle = '#1a2215'; ctx.fillRect(0,0,size,size);
+  } else if (type === 'wood') {
+    ctx.fillStyle = '#3d2616'; ctx.fillRect(0,0,size,size);
+    ctx.fillStyle = '#26160b';
+    ctx.fillRect(0, 15, size, 2);
+    ctx.fillRect(0, 40, size, 3);
   }
 
-  // Fake baked-in blood spatters
-  if (Math.random() > 0.5 && type !== 'dirt') {
-    ctx.fillStyle = 'rgba(90, 0, 0, 0.6)';
-    for(let i=0; i<8; i++) {
-       let bx = Math.random()*size;
-       let by = Math.random()*size;
-       ctx.fillRect(bx, by, 4 + Math.random()*6, 4 + Math.random()*6);
-    }
+  // Add chunky noise to all textures
+  for (let i = 0; i < 300; i++) {
+    ctx.fillStyle = Math.random() > 0.5 ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.1)';
+    const px = Math.floor(Math.random() * (size/2)) * 2;
+    const py = Math.floor(Math.random() * (size/2)) * 2;
+    ctx.fillRect(px, py, 2, 2);
   }
 
   const tex = new THREE.CanvasTexture(canvas);
-  // NEAREST FILTER disables all modern blurring. This makes it look like PS1/Quake.
-  tex.magFilter = THREE.NearestFilter;
+  tex.magFilter = THREE.NearestFilter; // The most important line for retro graphics
   tex.minFilter = THREE.NearestFilter;
   tex.generateMipmaps = false;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   return tex;
 }
 
-const texWall1 = makeRetroTex('wall');
-const texWall2 = makeRetroTex('wall2');
-const texFloor = makeRetroTex('floor');
-const texDirt  = makeRetroTex('dirt');
+const matBrick = new THREE.MeshLambertMaterial({ map: createRetroTexture('brick') });
+const matTile  = new THREE.MeshLambertMaterial({ map: createRetroTexture('tile') });
+const matDirt  = new THREE.MeshLambertMaterial({ map: createRetroTexture('dirt') });
+const matWood  = new THREE.MeshLambertMaterial({ map: createRetroTexture('wood') });
 
-// flatShading: true gives hard polygon edges on models
-const matWall1 = new THREE.MeshLambertMaterial({ map: texWall1, flatShading: true });
-const matWall2 = new THREE.MeshLambertMaterial({ map: texWall2, flatShading: true });
-const matFloor = new THREE.MeshLambertMaterial({ map: texFloor, flatShading: true });
-const matDirt  = new THREE.MeshLambertMaterial({ map: texDirt, flatShading: true });
-
-function box(w, h, d, mat) {
-  const geo = new THREE.BoxGeometry(w, h, d);
-  return new THREE.Mesh(geo, mat);
-}
+// ------------------------------------------------------------------
+// MAP BUILDER & COLLISION SYSTEM
+// ------------------------------------------------------------------
+const colliders = [];
 
 function addWall(x, z, w, d, mat) {
-  const h = 4.2;
-  const m = box(w, h, d, mat);
-  m.position.set(x, h/2, z);
-  scene.add(m);
-  return m;
+  const h = 4;
+  const geo = new THREE.BoxGeometry(w, h, d);
+  
+  // Adjust UVs so textures don't stretch horribly on long walls
+  const uvs = geo.attributes.uv;
+  for (let i = 0; i < uvs.count; i++) {
+    uvs.setX(i, uvs.getX(i) * (w > d ? w/4 : d/4));
+    uvs.setY(i, uvs.getY(i) * (h/4));
+  }
+
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x, h/2, z);
+  scene.add(mesh);
+
+  // Add to physics colliders
+  colliders.push({ minX: x - w/2, maxX: x + w/2, minZ: z - d/2, maxZ: z + d/2 });
 }
 
-function addFloor(x, z, w, d, mat, hasCeil=true) {
-  const f = box(w, 0.2, d, mat);
-  f.position.set(x, -0.1, z);
-  scene.add(f);
-  if (hasCeil) {
-    const c = box(w, 0.2, d, matWall1);
-    c.position.set(x, 4.3, z);
-    scene.add(c);
+function addFloor(x, z, w, d, mat, hasCeiling = true) {
+  const fGeo = new THREE.BoxGeometry(w, 0.2, d);
+  const uvs = fGeo.attributes.uv;
+  for (let i = 0; i < uvs.count; i++) { uvs.setX(i, uvs.getX(i) * w/4); uvs.setY(i, uvs.getY(i) * d/4); }
+  const floor = new THREE.Mesh(fGeo, mat);
+  floor.position.set(x, -0.1, z);
+  scene.add(floor);
+
+  if (hasCeiling) {
+    const cGeo = fGeo.clone();
+    const ceil = new THREE.Mesh(cGeo, matBrick);
+    ceil.position.set(x, 4.1, z);
+    scene.add(ceil);
   }
 }
 
-// ------------------------------------------------------------------
-// LEVEL DESIGN & COLLISION ZONES
-// ------------------------------------------------------------------
-const walkableAreas = []; 
-function addZone(minX, maxX, minZ, maxZ) {
-  // We slightly overlap bounds so players don't snag on sector seams
-  walkableAreas.push({ minX: minX-0.2, maxX: maxX+0.2, minZ: minZ-0.2, maxZ: maxZ+0.2 });
-}
+// === LAYOUT ===
+// Room 1 (Spawn)
+addFloor(0, 4, 10, 10, matTile);
+addWall(0, -1, 10, 2, matBrick);   // Back
+addWall(-6, 4, 2, 12, matBrick);   // Left
+addWall(6, 4, 2, 12, matBrick);    // Right
+addWall(-3.5, 10, 5, 2, matBrick); // Front Left
+addWall(3.5, 10, 5, 2, matBrick);  // Front Right
 
-// AREA 1: Spawn Room (x: -4 to 4, z: 0 to 8)
-addFloor(0, 4, 8, 8, matFloor);
-addWall(0, -0.5, 9, 1, matWall1);   // Back wall
-addWall(-4.5, 4, 1, 8, matWall1);   // Left wall
-addWall(4.5, 4, 1, 8, matWall1);    // Right wall
-addWall(-3, 8.5, 4, 1, matWall1);   // Front left (makes doorway)
-addWall(3, 8.5, 4, 1, matWall1);    // Front right (makes doorway)
-addZone(-4, 4, 0, 8);
+// Hallway
+addFloor(0, 15, 4, 10, matTile);
+addWall(-2.5, 15, 1, 10, matBrick);
+addWall(2.5, 15, 1, 10, matBrick);
 
-// AREA 2: The Hallway (x: -1 to 1, z: 8 to 18)
-addFloor(0, 13, 2, 10, matFloor);
-addWall(-1.5, 13, 1, 10, matWall2); // Hall left
-addWall(1.5, 13, 1, 10, matWall2);  // Hall right
-addZone(-1, 1, 8, 18);
+// Room 2
+addFloor(0, 25, 12, 10, matTile);
+addWall(-4.5, 19.5, 5, 1, matBrick); // Back left connect
+addWall(4.5, 19.5, 5, 1, matBrick);  // Back right connect
+addWall(-6.5, 25, 1, 12, matBrick);  // Left
+addWall(6.5, 25, 1, 12, matBrick);   // Right
+addWall(-4, 30.5, 6, 1, matBrick);   // Front Left
+addWall(4, 30.5, 6, 1, matBrick);    // Front Right
 
-// AREA 3: The Other Room (x: -5 to 5, z: 18 to 28)
-addFloor(0, 23, 10, 10, matFloor);
-addWall(-3.5, 17.5, 4, 1, matWall1); // Back left connecting to hall
-addWall(3.5, 17.5, 4, 1, matWall1);  // Back right connecting to hall
-addWall(-5.5, 23, 1, 10, matWall1);  // Room left
-addWall(5.5, 23, 1, 10, matWall1);   // Room right
-addWall(-4, 28.5, 4, 1, matWall1);   // Front left (doorway to outside)
-addWall(4, 28.5, 4, 1, matWall1);    // Front right (doorway to outside)
-addZone(-5, 5, 18, 28);
+// Courtyard (Outside)
+addFloor(0, 41, 20, 20, matDirt, false);
+addWall(-10.5, 41, 1, 22, matBrick);
+addWall(10.5, 41, 1, 22, matBrick);
+addWall(0, 51.5, 22, 1, matBrick);
+addWall(-7.5, 30.5, 5, 1, matBrick); // Connect left
+addWall(7.5, 30.5, 5, 1, matBrick);  // Connect right
 
-// AREA 4: The Extra Part Outside (x: -8 to 8, z: 28 to 45)
-addFloor(0, 36.5, 16, 17, matDirt, false); // No ceiling, it's outside!
-addWall(-8.5, 36.5, 1, 17, matWall2); // Out left
-addWall(8.5, 36.5, 1, 17, matWall2);  // Out right
-addWall(0, 45.5, 18, 1, matWall2);    // Out Far back
-addWall(-6, 28.5, 4, 1, matWall2);    // Connecting back left
-addWall(6, 28.5, 4, 1, matWall2);     // Connecting back right
-addZone(-8, 8, 28, 44);
-
-// The Door (Ajar, leading outside)
-const matWood = new THREE.MeshLambertMaterial({ color: 0x3d2a1d, flatShading: true });
-const door = box(2.8, 3.8, 0.2, matWood);
-door.position.set(-1.2, 1.9, 29);
-door.rotation.y = Math.PI * 0.25; // Kicked open
+// The Door (Kicked open)
+const door = new THREE.Mesh(new THREE.BoxGeometry(2.8, 3.8, 0.2), matWood);
+door.position.set(-1.2, 1.9, 31.2);
+door.rotation.y = Math.PI * 0.3;
 scene.add(door);
-
-// Props (Mystery Box outside)
-const mbox = box(2.4, 0.8, 0.8, matWood);
-mbox.position.set(0, 0.4, 38);
-scene.add(mbox);
-const mboxLid = box(2.4, 0.1, 0.8, matWood);
-mboxLid.position.set(0, 0.85, 38);
-mboxLid.rotation.x = -0.3; // slightly open
-scene.add(mboxLid);
+colliders.push({ minX: -2.6, maxX: -1.0, minZ: 30.8, maxZ: 32.5 }); // rough door collision
 
 // ------------------------------------------------------------------
-// RETRO ZOMBIES (Low-poly static actors)
+// ZOMBIES (Simple AI)
 // ------------------------------------------------------------------
-function addRetroZombie(x, z, rot) {
+const zombies = [];
+const matZSkin = new THREE.MeshLambertMaterial({ color: 0x6e705b });
+const matZClothes = new THREE.MeshLambertMaterial({ color: 0x3d3532 });
+
+function spawnZombie(x, z) {
   const zGrp = new THREE.Group();
-  const zMat = new THREE.MeshLambertMaterial({ color: 0x38392d, flatShading: true });
-  const skinMat = new THREE.MeshLambertMaterial({ color: 0x5a574b, flatShading: true });
   
-  const body = box(0.6, 1.0, 0.4, zMat); body.position.y = 0.5; zGrp.add(body);
-  const head = box(0.35, 0.35, 0.35, skinMat); head.position.y = 1.15; zGrp.add(head);
-  const armL = box(0.2, 0.2, 0.7, zMat); armL.position.set(-0.4, 0.8, 0.25); zGrp.add(armL);
-  const armR = box(0.2, 0.2, 0.7, zMat); armR.position.set(0.4, 0.8, 0.35); zGrp.add(armR);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.5), matZClothes);
+  body.position.y = 0.6; zGrp.add(body);
   
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), matZSkin);
+  head.position.y = 1.4; zGrp.add(head);
+  
+  const arms = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.25, 0.25), matZClothes);
+  arms.position.set(0, 1.0, 0.3); zGrp.add(arms);
+
   zGrp.position.set(x, 0, z);
-  zGrp.rotation.y = rot;
   scene.add(zGrp);
-  return zGrp;
+  zombies.push(zGrp);
 }
-addRetroZombie(0, 16, Math.PI);        // Zombie in the hallway
-addRetroZombie(3, 24, -Math.PI/4);     // Zombie in the second room
-addRetroZombie(-4, 35, Math.PI/2);     // Zombie outside
-addRetroZombie(4, 40, -Math.PI*0.8);   // Zombie outside
+
+spawnZombie(0, 16);    // Hallway
+spawnZombie(-3, 26);   // Room 2
+spawnZombie(4, 27);    // Room 2
+spawnZombie(0, 38);    // Courtyard
+spawnZombie(-6, 42);   // Courtyard
 
 // ------------------------------------------------------------------
-// VIEWMODEL (Low-Poly Shotgun)
+// VIEWMODEL (Low-Poly Shotgun & Recoil)
 // ------------------------------------------------------------------
 const viewmodel = new THREE.Group();
-const gunMetal = new THREE.MeshLambertMaterial({ color: 0x222222, flatShading: true });
-const gunWood = new THREE.MeshLambertMaterial({ color: 0x4a2e1b, flatShading: true });
-const skin = new THREE.MeshLambertMaterial({ color: 0x6e4e3b, flatShading: true });
+const matGunMetal = new THREE.MeshLambertMaterial({ color: 0x222222 });
 
-// Using low radialSegments (4 or 5) creates a harsh PS1/Quake prism look
-function lowPolyCyl(r, l, mat) {
-  const geo = new THREE.CylinderGeometry(r, r, l, 5); 
-  geo.rotateX(Math.PI/2);
-  return new THREE.Mesh(geo, mat);
-}
-
-const receiver = lowPolyCyl(0.05, 0.4, gunMetal);
-receiver.position.set(0.1, -0.2, -0.6);
-viewmodel.add(receiver);
-
-const barrel = lowPolyCyl(0.03, 0.6, gunMetal);
-barrel.position.set(0.1, -0.17, -1.0);
+const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.8), matGunMetal);
+barrel.position.set(0.15, -0.2, -0.6);
 viewmodel.add(barrel);
 
-const pump = lowPolyCyl(0.055, 0.25, gunWood);
-pump.position.set(0.1, -0.22, -0.9);
+const pump = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.3), matWood);
+pump.position.set(0.15, -0.22, -0.5);
 viewmodel.add(pump);
 
-const stock = lowPolyCyl(0.06, 0.4, gunWood);
-stock.position.set(0.1, -0.28, -0.2);
-stock.rotation.x = -0.2;
-viewmodel.add(stock);
-
-// Blocky fist (support hand)
-const fist = box(0.12, 0.12, 0.12, skin);
-fist.position.set(0.1, -0.25, -0.9);
-fist.rotation.z = Math.PI/4;
-viewmodel.add(fist);
+// Muzzle Flash
+const flashGeo = new THREE.PlaneGeometry(0.3, 0.3);
+const flashMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.8 });
+const flash = new THREE.Mesh(flashGeo, flashMat);
+flash.position.set(0.15, -0.2, -1.05);
+flash.visible = false;
+viewmodel.add(flash);
 
 camera.add(viewmodel);
 scene.add(camera);
 
 // ------------------------------------------------------------------
-// LIGHTING (Harsh, localized, retro)
+// LIGHTING
 // ------------------------------------------------------------------
-scene.add(new THREE.AmbientLight(0x1a1210)); 
-
-// Spawn Room light
-const l1 = new THREE.PointLight(0xffa550, 1.2, 12);
-l1.position.set(0, 3.5, 4);
-scene.add(l1);
-
-// Hallway light (reddish/creepy)
-const l2 = new THREE.PointLight(0xff2010, 1.0, 8);
-l2.position.set(0, 3.5, 13);
-scene.add(l2);
-
-// Room 2 light
-const l3 = new THREE.PointLight(0xffcc88, 1.0, 12);
-l3.position.set(0, 3.5, 23);
-scene.add(l3);
-
-// Outside moonlight (blueish)
-const moon = new THREE.PointLight(0x4466aa, 1.5, 25);
-moon.position.set(0, 8, 35);
-scene.add(moon);
+scene.add(new THREE.AmbientLight(0x111111)); 
+scene.add(new THREE.PointLight(0xffddaa, 0.8, 15)).position.set(0, 3, 5);   // R1
+scene.add(new THREE.PointLight(0xff5555, 0.7, 12)).position.set(0, 3, 15);  // Hall
+scene.add(new THREE.PointLight(0xffddaa, 0.8, 15)).position.set(0, 3, 25);  // R2
+scene.add(new THREE.PointLight(0x4466aa, 1.0, 30)).position.set(0, 6, 40);  // Moon
 
 // ------------------------------------------------------------------
-// MOVEMENT & CONTROLS
+// INPUT & MOVEMENT LOGIC
 // ------------------------------------------------------------------
 let yaw = 0, pitch = 0, locked = false;
+const keys = {};
 
 document.body.addEventListener('click', () => {
-  if (!locked) document.body.requestPointerLock();
-});
-document.addEventListener('pointerlockchange', () => {
-  locked = document.pointerLockElement === document.body;
-  if (locked) document.getElementById('lookTip').classList.add('hide');
-});
-document.addEventListener('mousemove', (e) => {
-  if (!locked) return;
-  yaw -= e.movementX * 0.0025;
-  pitch -= e.movementY * 0.0025;
-  pitch = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, pitch));
+  if (!locked) {
+    document.body.requestPointerLock();
+  } else {
+    fireWeapon();
+  }
 });
 
-const keys = {};
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === document.body;
+  document.getElementById('lookTip').className = locked ? 'hide' : '';
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!locked) return;
+  yaw -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
+  pitch = Math.max(-Math.PI/2.1, Math.min(Math.PI/2.1, pitch));
+});
+
 document.addEventListener('keydown', e => keys[e.code] = true);
 document.addEventListener('keyup', e => keys[e.code] = false);
 
-function canMove(nx, nz) {
-  for (let z of walkableAreas) {
-    if (nx >= z.minX && nx <= z.maxX && nz >= z.minZ && nz <= z.maxZ) return true;
+// Physics Helper
+function checkCollision(nx, nz) {
+  const r = 0.3; // player radius
+  for (let c of colliders) {
+    if (nx + r > c.minX && nx - r < c.maxX && nz + r > c.minZ && nz - r < c.maxZ) {
+      return true; // Hit a wall
+    }
   }
   return false;
 }
 
+// Shooting Mechanics
+let ammo = 8;
+let recoilOffset = 0;
+
+function fireWeapon() {
+  if (ammo <= 0 || recoilOffset > 0.05) return;
+  ammo--;
+  document.getElementById('ammoCurrent').innerText = ammo;
+  
+  // Recoil effect
+  recoilOffset = 0.15;
+  pitch += 0.05; // Kick camera up slightly
+  
+  flash.visible = true;
+  flash.rotation.z = Math.random() * Math.PI;
+  setTimeout(() => flash.visible = false, 50);
+}
+
+// ------------------------------------------------------------------
+// MAIN LOOP
+// ------------------------------------------------------------------
 const clock = new THREE.Clock();
 let sway = 0;
 
-function animate(){
+function animate() {
   requestAnimationFrame(animate);
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const dt = Math.min(clock.getDelta(), 0.1);
 
   camera.rotation.set(pitch, yaw, 0, 'YXZ');
 
-  const speed = 4.0 * dt;
+  // Player Movement
+  const speed = 4.5 * dt;
   const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
   const right = new THREE.Vector3(-forward.z, 0, forward.x);
   
@@ -390,29 +370,56 @@ function animate(){
   if (keys['KeyD']) { mx += right.x; mz += right.z; }
   if (keys['KeyA']) { mx -= right.x; mz -= right.z; }
 
-  // Normalize movement vector so diagonals aren't faster
-  const length = Math.sqrt(mx*mx + mz*mz);
-  if (length > 0) {
-    mx = (mx / length) * speed;
-    mz = (mz / length) * speed;
+  // Normalize diagonal speed
+  const len = Math.sqrt(mx*mx + mz*mz);
+  if (len > 0) {
+    mx = (mx / len) * speed;
+    mz = (mz / len) * speed;
   }
 
-  // Slide along walls natively
-  if (canMove(camera.position.x + mx, camera.position.z)) {
+  // Slide against walls (evaluate X and Z separately)
+  if (!checkCollision(camera.position.x + mx, camera.position.z)) {
     camera.position.x += mx;
   }
-  if (canMove(camera.position.x, camera.position.z + mz)) {
+  if (!checkCollision(camera.position.x, camera.position.z + mz)) {
     camera.position.z += mz;
   }
 
-  // Quake-style view bobbing
-  const moving = length > 0;
-  const bobT = performance.now() * 0.008;
-  camera.position.y = 1.6 + (moving ? Math.sin(bobT) * 0.04 : 0);
+  // View bobbing and gun sway
+  const isMoving = len > 0;
+  const bob = performance.now() * 0.006;
+  camera.position.y = 1.6 + (isMoving ? Math.sin(bob) * 0.04 : 0);
   
   sway += dt;
-  viewmodel.position.x = Math.sin(sway * 1.5) * 0.005;
-  viewmodel.position.y = (moving ? Math.abs(Math.sin(bobT)) * 0.015 : 0);
+  
+  // Gun recoil recovery
+  if (recoilOffset > 0) recoilOffset -= dt * 0.5;
+  if (recoilOffset < 0) recoilOffset = 0;
+
+  viewmodel.position.x = Math.sin(sway * 1.2) * 0.005;
+  viewmodel.position.y = (isMoving ? Math.abs(Math.sin(bob)) * 0.01 : 0);
+  viewmodel.position.z = recoilOffset; // Gun kicks backwards
+
+  // Zombie AI logic
+  zombies.forEach(z => {
+    const dx = camera.position.x - z.position.x;
+    const dz = camera.position.z - z.position.z;
+    const dist = Math.sqrt(dx*dx + dz*dz);
+    
+    // If player is close, turn and walk towards them
+    if (dist < 18 && dist > 1.2) {
+      z.lookAt(camera.position.x, 0, camera.position.z);
+      
+      // Simple collision for zombies too (don't walk through walls)
+      const zx = z.position.x + (dx/dist) * 0.8 * dt;
+      const zz = z.position.z + (dz/dist) * 0.8 * dt;
+      if (!checkCollision(zx, z.position.z)) z.position.x = zx;
+      if (!checkCollision(z.position.x, zz)) z.position.z = zz;
+      
+      // Zombie wobble walk
+      z.position.y = Math.abs(Math.sin(sway * 4)) * 0.05;
+    }
+  });
 
   renderer.render(scene, camera);
 }
