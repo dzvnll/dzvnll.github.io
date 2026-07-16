@@ -66,6 +66,12 @@
   }
   #crosshair::before { width: 14px; height: 2px; top: -1px; left: -7px; }
   #crosshair::after { width: 2px; height: 14px; top: -7px; left: -1px; }
+  #hitmarker {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    font-size: 34px; font-family: 'VT323', monospace; color: #fff;
+    z-index: 16; pointer-events: none; opacity: 0; transition: opacity 0.08s;
+    text-shadow: 0 0 4px #000, 1px 1px 0 #000;
+  }
 
   .menu-overlay {
     position: fixed; inset: 0;
@@ -178,6 +184,7 @@
 </div>
 <div id="dmgVignette"></div>
 <div id="crosshair"></div>
+<div id="hitmarker">✕</div>
 
 <div id="mainMenu" class="menu-overlay">
   <div class="dvd-corner-frame"><span class="tl"></span><span class="tr"></span><span class="bl"></span><span class="br"></span></div>
@@ -371,17 +378,93 @@ function makeTex(type) {
   return tex;
 }
 
+// Gritty, painterly gore texture generator — used for zombies, the player's own
+// body, and blood. Uses soft radial gradients instead of hard pixel blocks so it
+// reads as wet/organic rather than retro-blocky.
+function makeGoreTex(baseColor, opts = {}) {
+  const size = 64;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const ctx = c.getContext('2d');
+
+  ctx.fillStyle = baseColor; ctx.fillRect(0, 0, size, size);
+
+  // Mottled base shading (patchy discoloration, grime)
+  for (let i = 0; i < 46; i++) {
+    const x = Math.random()*size, y = Math.random()*size, r = 4 + Math.random()*10;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    const dark = Math.random() > 0.45;
+    g.addColorStop(0, dark ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.07)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+  }
+
+  // Wet blood wounds with drip trails
+  const woundCount = opts.wounds ?? 3;
+  for (let i = 0; i < woundCount; i++) {
+    const x = Math.random()*size, y = Math.random()*(size*0.7), r = 3 + Math.random()*7;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, '#2a0000'); g.addColorStop(0.45, 'rgba(120,0,0,0.95)'); g.addColorStop(1, 'rgba(120,0,0,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+    if (Math.random() < 0.8) {
+      const dripLen = 6 + Math.random()*18;
+      const dripW = 1 + Math.random()*2;
+      const dg = ctx.createLinearGradient(x, y, x, y+dripLen);
+      dg.addColorStop(0, 'rgba(100,0,0,0.8)'); dg.addColorStop(1, 'rgba(100,0,0,0)');
+      ctx.fillStyle = dg; ctx.fillRect(x - dripW/2, y, dripW, dripLen);
+    }
+  }
+
+  // Occasional exposed bone / torn flesh fleck
+  if (opts.bone && Math.random() < 0.6) {
+    const x = Math.random()*size, y = Math.random()*size;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(Math.random()*Math.PI);
+    ctx.fillStyle = '#e6dcc0'; ctx.beginPath(); ctx.ellipse(0, 0, 4+Math.random()*3, 2+Math.random()*2, 0, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = 'rgba(60,0,0,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.restore();
+  }
+
+  // Fine grime speckle for texture (kept subtle, not blocky)
+  for (let i = 0; i < 120; i++) {
+    ctx.fillStyle = Math.random() > 0.5 ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.05)';
+    ctx.fillRect(Math.random()*size, Math.random()*size, 1, 1);
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.magFilter = tex.minFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+// Soft radial blood-drop texture used for hit sprays and ground decals
+function makeBloodSpriteTex() {
+  const size = 32;
+  const c = document.createElement('canvas'); c.width = size; c.height = size;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+  g.addColorStop(0, 'rgba(150,0,0,1)');
+  g.addColorStop(0.55, 'rgba(100,0,0,0.85)');
+  g.addColorStop(1, 'rgba(100,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(c);
+  tex.magFilter = tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+const bloodSpriteTex = makeBloodSpriteTex();
+const bloodSpriteMat = new THREE.SpriteMaterial({ map: bloodSpriteTex, transparent: true, depthWrite: false });
+
 const matWall = new THREE.MeshLambertMaterial({ map: makeTex('wall') });
 const matFloor  = new THREE.MeshLambertMaterial({ map: makeTex('floor') });
 const matDirt  = new THREE.MeshLambertMaterial({ map: makeTex('dirt') });
-const matSkin = new THREE.MeshLambertMaterial({ map: makeTex('skin') });
+const matSkin = new THREE.MeshLambertMaterial({ map: makeGoreTex('#c5a085', { wounds: 0 }) });
 const matGunMetal = new THREE.MeshLambertMaterial({ map: makeTex('gunMetal') });
 const matGunWood = new THREE.MeshLambertMaterial({ map: makeTex('wood') });
 const matBarrier = new THREE.MeshLambertMaterial({ map: makeTex('barrier') });
+const matPlayerCloth = new THREE.MeshLambertMaterial({ map: makeGoreTex('#2b3a2e', { wounds: 0 }) });
 
-const matZFace = new THREE.MeshLambertMaterial({ map: makeTex('zFace') });
-const matZUniform = new THREE.MeshLambertMaterial({ map: makeTex('zUniform') });
-const matZFlesh = new THREE.MeshLambertMaterial({ map: makeTex('zFlesh') });
+// Zombie materials are generated FRESH per-zombie in spawnZombie() (see below) so
+// every zombie has unique wounds/gore instead of all sharing one identical texture.
 
 // ------------------------------------------------------------------
 // MAP GEN - now a LOOP: Spawn Room -> Hall -> Mid Room -> Yard -> Side Corridor -> back to Spawn Room
@@ -513,15 +596,93 @@ stock.position.set(0.25, -0.28, 0.15); stock.rotation.x = -0.15; vmShotgun.add(s
 const flash = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6), new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, side: THREE.DoubleSide }));
 flash.position.set(0.25, -0.22, -1.2); flash.visible = false; vmShotgun.add(flash);
 
-const hLeft = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.35), matSkin);
+const hForeL = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 0.5), matSkin);
+hForeL.position.set(-0.35, -0.28, -0.15); vmHands.add(hForeL);
+const hLeft = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.32), matSkin);
 hLeft.position.set(-0.35, -0.25, -0.4); vmHands.add(hLeft);
-const hRight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.35), matSkin);
+const hForeR = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 0.5), matSkin);
+hForeR.position.set(0.35, -0.28, -0.15); vmHands.add(hForeR);
+const hRight = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.32), matSkin);
 hRight.position.set(0.35, -0.25, -0.4); vmHands.add(hRight);
+
+const muzzleLight = new THREE.PointLight(0xffaa33, 0, 6);
+muzzleLight.position.set(0.25, -0.22, -1.1);
+viewmodel.add(muzzleLight);
 
 viewmodel.add(vmShotgun);
 viewmodel.add(vmHands);
 camera.add(viewmodel);
 scene.add(camera);
+
+// ------------------------------------------------------------------
+// FIRST-PERSON BODY - a torso, shoulders and legs that follow the camera's yaw
+// (not pitch), so looking straight down reveals your own body like a real FPS.
+// ------------------------------------------------------------------
+const playerBody = new THREE.Group();
+scene.add(playerBody);
+
+function bodyPart(w, h, d, mat) {
+  const geo = new THREE.BoxGeometry(w, h, d, 2, 2, 2);
+  mangleGeometry(geo, 0.015);
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = false; m.receiveShadow = false;
+  return m;
+}
+// mangleGeometry is defined further down alongside the zombie-building code;
+// function declarations are hoisted, so calling it here before its textual
+// definition is safe.
+
+const pTorso = bodyPart(0.46, 0.62, 0.28, matPlayerCloth);
+pTorso.position.set(0, 1.28, 0.08);
+playerBody.add(pTorso);
+
+const pShoulderL = bodyPart(0.16, 0.16, 0.16, matPlayerCloth);
+pShoulderL.position.set(-0.28, 1.5, 0.08);
+playerBody.add(pShoulderL);
+const pShoulderR = bodyPart(0.16, 0.16, 0.16, matPlayerCloth);
+pShoulderR.position.set(0.28, 1.5, 0.08);
+playerBody.add(pShoulderR);
+
+const pArmL = bodyPart(0.13, 0.5, 0.15, matSkin);
+pArmL.position.set(-0.3, 1.05, 0.16); pArmL.rotation.x = 0.35;
+playerBody.add(pArmL);
+const pArmR = bodyPart(0.13, 0.5, 0.15, matSkin);
+pArmR.position.set(0.3, 1.05, 0.16); pArmR.rotation.x = 0.35;
+playerBody.add(pArmR);
+
+const pLegL = bodyPart(0.19, 0.92, 0.22, matPlayerCloth);
+pLegL.position.set(-0.13, 0.48, 0.06);
+playerBody.add(pLegL);
+const pLegR = bodyPart(0.19, 0.92, 0.22, matPlayerCloth);
+pLegR.position.set(0.13, 0.48, 0.06);
+playerBody.add(pLegR);
+
+// ------------------------------------------------------------------
+// BLOOD PARTICLES & DECALS
+// ------------------------------------------------------------------
+const bloodParticles = [];
+function spawnBlood(pos, count = 6, spread = 2.5) {
+  for (let i = 0; i < count; i++) {
+    const s = new THREE.Sprite(bloodSpriteMat.clone());
+    const scale = 0.07 + Math.random()*0.12;
+    s.scale.set(scale, scale, 1);
+    s.position.copy(pos);
+    scene.add(s);
+    const vel = new THREE.Vector3((Math.random()-0.5)*spread, Math.random()*spread*0.7 + 0.6, (Math.random()-0.5)*spread);
+    bloodParticles.push({ mesh: s, vel, life: 0, maxLife: 0.4 + Math.random()*0.35 });
+  }
+}
+function spawnBloodDecal(pos) {
+  const size = 0.55 + Math.random()*0.7;
+  const geo = new THREE.PlaneGeometry(size, size);
+  const mat = new THREE.MeshBasicMaterial({ map: bloodSpriteTex, transparent: true, opacity: 0.8, depthWrite: false });
+  const decal = new THREE.Mesh(geo, mat);
+  decal.rotation.x = -Math.PI/2;
+  decal.rotation.z = Math.random()*Math.PI*2;
+  decal.position.set(pos.x, 0.02, pos.z);
+  scene.add(decal);
+  setTimeout(() => { scene.remove(decal); geo.dispose(); mat.dispose(); }, 20000);
+}
 
 // ------------------------------------------------------------------
 // PROCEDURAL ZOMBIES
@@ -553,9 +714,10 @@ function spawnZombie(x, z, spdMult) {
   const zGroup = new THREE.Group();
   zGroup.position.set(x, 0, z);
 
-  const mFace = matZFace.clone();
-  const mUniform = matZUniform.clone();
-  const mFlesh = matZFlesh.clone();
+  const uniformColors = ['#3b423f', '#33301f', '#402a2a', '#2e3628'];
+  const mFace = new THREE.MeshLambertMaterial({ map: makeGoreTex('#6e5a55', { wounds: 2 + Math.floor(Math.random()*2), bone: Math.random() < 0.4 }) });
+  const mUniform = new THREE.MeshLambertMaterial({ map: makeGoreTex(uniformColors[Math.floor(Math.random()*uniformColors.length)], { wounds: 3 + Math.floor(Math.random()*3) }) });
+  const mFlesh = new THREE.MeshLambertMaterial({ map: makeGoreTex('#6e5a55', { wounds: 2, bone: Math.random() < 0.35 }) });
 
   const torso = makeOrganicLimb(0.28, 0.22, 0.75, mUniform, 0, true);
   torso.position.y = 1.0;
@@ -850,6 +1012,40 @@ function initiateReload() {
   }, 1000);
 }
 
+function showHitmarker(kill) {
+  const hm = document.getElementById('hitmarker');
+  hm.style.color = kill ? '#ffcc00' : '#fff';
+  hm.style.opacity = 1;
+  clearTimeout(hm._t);
+  hm._t = setTimeout(() => hm.style.opacity = 0, 110);
+}
+
+// Applies damage to a zombie, handles hit-flash, blood spray, and death/kill payout.
+// Shared by both punch and shotgun so their feedback is consistent.
+function applyDamageToZombie(zData, dmg, hitPoint) {
+  if (!zData || zData.isDead) return;
+  zData.hp -= dmg; pts += 10; document.getElementById('points').innerText = pts;
+
+  if (hitPoint) spawnBlood(hitPoint, 5, 2.2);
+
+  zData.parts.forEach(p => { p.material.color.setHex(0xff0000); });
+  setTimeout(() => {
+    if (!zData.isDead) zData.parts.forEach(p => { p.material.color.setHex(0xffffff); });
+  }, 100);
+
+  if (zData.hp <= 0) {
+    zData.isDead = true; pts += 60; document.getElementById('points').innerText = pts;
+    zData.parts.forEach(p => { p.material.color.setHex(0x330000); });
+    spawnBlood(zData.mesh.position.clone().setY(1.1), 14, 3.5);
+    spawnBloodDecal(zData.mesh.position);
+    zombiesAlive--;
+    showHitmarker(true);
+    if (zombiesAlive <= 0) { currentRound++; setTimeout(startWave, 3500); }
+  } else {
+    showHitmarker(false);
+  }
+}
+
 document.body.addEventListener('mousedown', e => {
   if (currentGameState !== STATES.PLAYING || e.button !== 0) return;
 
@@ -857,6 +1053,16 @@ document.body.addEventListener('mousedown', e => {
     hRight.position.z -= 0.3; hRight.rotation.y = 0.5;
     setTimeout(() => { hRight.position.z += 0.3; hRight.rotation.y = 0; }, 150);
     playThud(300);
+
+    raycaster.setFromCamera({ x: 0, y: 0 }, camera);
+    const hits = raycaster.intersectObjects(targets);
+    if (hits.length > 0 && hits[0].distance < 2.2) {
+      const zData = hits[0].object.userData.zData;
+      if (zData && !zData.isDead) {
+        zData.mesh.translateZ(-0.2);
+        applyDamageToZombie(zData, 60, hits[0].point);
+      }
+    }
     return;
   }
 
@@ -869,29 +1075,33 @@ document.body.addEventListener('mousedown', e => {
 
   flash.visible = true; flash.rotation.z = Math.random() * Math.PI;
   setTimeout(() => flash.visible = false, 50);
+  muzzleLight.intensity = 5;
+  setTimeout(() => muzzleLight.intensity = 0, 60);
 
-  raycaster.setFromCamera({ x: 0, y: 0 }, camera);
-  const hits = raycaster.intersectObjects(targets);
-  if (hits.length > 0) {
-    const zData = hits[0].object.userData.zData;
-    if (zData && !zData.isDead) {
-      zData.hp -= 100; pts += 10; document.getElementById('points').innerText = pts;
-
-      zData.parts.forEach(p => { p.material.color.setHex(0xff0000); });
-      setTimeout(() => {
-        if (!zData.isDead) zData.parts.forEach(p => { p.material.color.setHex(0xffffff); });
-      }, 100);
-
-      zData.mesh.translateZ(-0.4);
-
-      if (zData.hp <= 0) {
-        zData.isDead = true; pts += 60; document.getElementById('points').innerText = pts;
-        zData.parts.forEach(p => { p.material.color.setHex(0x330000); });
-        zombiesAlive--;
-        if (zombiesAlive <= 0) { currentRound++; setTimeout(startWave, 3500); }
+  // Shotgun pellet spread: several rays in a tight cone instead of one perfect
+  // hitscan shot. Damage is accumulated per-zombie so a shot doesn't trigger the
+  // kill/death logic more than once even if multiple pellets land.
+  const PELLETS = 7;
+  const PELLET_DAMAGE = 24;
+  const hitTotals = new Map();
+  let anyHit = false;
+  for (let i = 0; i < PELLETS; i++) {
+    const spread = 0.018;
+    raycaster.setFromCamera({ x: (Math.random()-0.5)*spread, y: (Math.random()-0.5)*spread }, camera);
+    const hits = raycaster.intersectObjects(targets);
+    if (hits.length > 0) {
+      const zData = hits[0].object.userData.zData;
+      if (zData && !zData.isDead) {
+        anyHit = true;
+        hitTotals.set(zData, (hitTotals.get(zData) || { dmg: 0, point: hits[0].point }));
+        hitTotals.get(zData).dmg += PELLET_DAMAGE;
       }
     }
   }
+  hitTotals.forEach((info, zData) => {
+    zData.mesh.translateZ(-0.4);
+    applyDamageToZombie(zData, info.dmg, info.point);
+  });
 });
 
 // ------------------------------------------------------------------
@@ -939,6 +1149,12 @@ function animate() {
       if (camera.position.y <= 1.6) { camera.position.y = 1.6; velY = 0; isGrounded = true; }
     }
 
+    // First-person body: follows yaw (not pitch) with a slight forward offset so
+    // it sits in view when you look down, instead of clipping through the head.
+    playerBody.visible = true;
+    playerBody.position.set(camera.position.x + fwd.x*0.12, camera.position.y - 1.6, camera.position.z + fwd.z*0.12);
+    playerBody.rotation.y = yaw;
+
     // Barrier prompt
     const prompt = document.getElementById('promptText');
     if (nearBarrier() && pts >= BARRIER_COST) prompt.style.opacity = 1;
@@ -978,6 +1194,10 @@ function animate() {
             scene.remove(mesh);
             targets = targets.filter(t => t.userData.zData !== z);
             zombies.splice(i, 1);
+            z.parts.forEach(p => {
+              if (p.geometry) p.geometry.dispose();
+              if (p.material) { if (p.material.map) p.material.map.dispose(); p.material.dispose(); }
+            });
         }
         continue;
       }
@@ -1014,6 +1234,19 @@ function animate() {
           z.attackCd = 1.0;
           damagePlayer(z.dmg);
         }
+      }
+    }
+
+    for (let i = bloodParticles.length - 1; i >= 0; i--) {
+      const p = bloodParticles[i];
+      p.life += dt;
+      p.vel.y -= 9.8 * dt;
+      p.mesh.position.addScaledVector(p.vel, dt);
+      p.mesh.material.opacity = Math.max(0, 1 - p.life/p.maxLife);
+      if (p.life >= p.maxLife || p.mesh.position.y <= 0) {
+        scene.remove(p.mesh);
+        p.mesh.material.dispose();
+        bloodParticles.splice(i, 1);
       }
     }
   }
