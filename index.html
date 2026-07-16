@@ -51,6 +51,7 @@
     z-index: 20; font-family: 'Courier New', Courier, monospace;
     color: #fff; border: 4px double #444;
   }
+  
   h1 { font-size: 56px; color: #d00; margin-bottom: 20px; text-shadow: 3px 3px 0 #000; text-align: center; }
   p.sub { font-size: 18px; margin-bottom: 30px; color: #aaa; text-align: center; }
 
@@ -102,6 +103,7 @@ scene.fog = new THREE.Fog(0x0a0a0c, 3, 25);
 
 const camera = new THREE.PerspectiveCamera(85, window.innerWidth/window.innerHeight, 0.05, 100);
 camera.rotation.order = 'YXZ';
+camera.position.set(0, 1.6, 0); // Initialize camera height
 
 const RES_SCALE = 0.5; // Pixelated render
 const renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -238,8 +240,6 @@ hRight.position.set(0.3, -0.3, -0.4); vmHands.add(hRight);
 
 viewmodel.add(vmShotgun);
 viewmodel.add(vmHands);
-vmHands.visible = false; // Start with shotgun
-let equipped = 1; // 1 = Shotgun, 0 = Hands
 
 camera.add(viewmodel);
 scene.add(camera);
@@ -301,8 +301,6 @@ let currentRound = 1;
 let zombiesAlive = 0;
 
 function startWave() {
-  currentRound++;
-  if (currentRound === 1) currentRound = 1; // first run
   document.getElementById('roundNumber').innerText = currentRound;
   
   const notice = document.getElementById('waveNotice');
@@ -328,39 +326,63 @@ function startWave() {
 let yaw = 0, pitch = 0;
 const keys = {};
 
+// We ONLY request lock here. State logic gets handled by the pointerlockchange event below.
 document.getElementById('startBtn').addEventListener('click', () => {
-  currentGameState = STATES.PLAYING;
   document.body.requestPointerLock();
 });
 
 document.getElementById('resumeBtn').addEventListener('click', () => {
-  currentGameState = STATES.PLAYING;
   document.body.requestPointerLock();
 });
 
+// Leave map resets everything
 document.getElementById('leaveBtn').addEventListener('click', () => {
   currentGameState = STATES.MENU;
   document.getElementById('pauseMenu').style.display = 'none';
   document.getElementById('mainMenu').style.display = 'flex';
   document.getElementById('hud').style.display = 'none';
+  document.getElementById('crosshair').style.display = 'none';
+  
+  // Wipe entities & reset stats
+  zombies.forEach(z => scene.remove(z.mesh));
+  zombies.length = 0;
+  targets.length = 0;
+  currentRound = 1;
+  zombiesAlive = 0;
+  pts = 500;
+  ammoCur = 8;
+  ammoRes = 32;
+  
+  document.getElementById('points').innerText = pts;
+  document.getElementById('ammoCurrent').innerText = ammoCur;
+  document.getElementById('ammoReserve').innerText = ammoRes;
+  
+  camera.position.set(0, 1.6, 0); // Reset position
+  yaw = 0; pitch = 0;
 });
 
+// This is where state actually changes, preventing race conditions
 document.addEventListener('pointerlockchange', () => {
   const isLocked = document.pointerLockElement === document.body;
-  if (isLocked && (currentGameState === STATES.MENU || currentGameState === STATES.PAUSED)) {
-    // We just locked the pointer from a menu, transition to game
+  
+  if (isLocked) {
+    // Successfully locked cursor -> Transition to PLAYING
     currentGameState = STATES.PLAYING;
     document.getElementById('mainMenu').style.display = 'none';
     document.getElementById('pauseMenu').style.display = 'none';
     document.getElementById('hud').style.display = 'block';
     
+    // Show crosshair if shotgun equipped
+    if (equipped === 1) document.getElementById('crosshair').style.display = 'block';
+    
     // Auto-start wave 1 if empty
     if (zombiesAlive === 0 && currentRound === 1 && zombies.length === 0) startWave();
     
-  } else if (!isLocked && currentGameState === STATES.PLAYING) {
-    // User hit ESC during gameplay
+  } else if (currentGameState === STATES.PLAYING) {
+    // User hit ESC -> Break lock and PAUSE
     currentGameState = STATES.PAUSED;
     document.getElementById('pauseMenu').style.display = 'flex';
+    document.getElementById('crosshair').style.display = 'none';
   }
 });
 
@@ -386,6 +408,7 @@ document.addEventListener('mousemove', e => {
 // ------------------------------------------------------------------
 let ammoCur = 8, ammoRes = 32, pts = 500;
 let isReloading = false;
+let equipped = 1; // 1 = Shotgun, 0 = Hands
 const raycaster = new THREE.Raycaster();
 
 function switchWeapon(id) {
@@ -394,8 +417,14 @@ function switchWeapon(id) {
   vmHands.visible = (id === 0);
   vmShotgun.visible = (id === 1);
   document.getElementById('ammo').style.display = id === 1 ? 'block' : 'none';
-  document.getElementById('crosshair').style.display = id === 1 ? 'block' : 'none';
+  
+  // Only display crosshair if currently playing
+  if (currentGameState === STATES.PLAYING) {
+    document.getElementById('crosshair').style.display = id === 1 ? 'block' : 'none';
+  }
 }
+// Sync UI with default weapon immediately on load
+switchWeapon(equipped);
 
 function initiateReload() {
   if (isReloading || ammoCur === 8 || ammoRes === 0) return;
@@ -447,7 +476,10 @@ document.body.addEventListener('mousedown', e => {
         zData.isDead = true; pts += 60; document.getElementById('points').innerText = pts;
         zData.parts.forEach(p => { p.material.transparent = false; p.material.opacity = 1.0; });
         zombiesAlive--;
-        if (zombiesAlive <= 0) setTimeout(startWave, 2000);
+        if (zombiesAlive <= 0) {
+            currentRound++; 
+            setTimeout(startWave, 2000);
+        }
       }
     }
   }
