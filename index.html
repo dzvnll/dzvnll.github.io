@@ -438,7 +438,7 @@ zData.mesh.translateZ(-0.2); applyDamageToZombie(zData, 60, hits[0].point);
 } }
 return; }
 if (isReloading || ammoCur <= 0) { if (ammoCur === 0) initiateReload(); return; } ammoCur--; document.getElementById('ammoCurrent').innerText = ammoCur;
-playShot(); pitch += 0.08; viewmodel.position.z += 0.2; pump.position.z -= 0.15;
+playShot(); pitch += 0.00; viewmodel.position.z += 0.2; pump.position.z -= 0.15;
 setTimeout(() => { viewmodel.position.z -= 0.2; pump.position.z += 0.15; }, 150); flash.visible = true; flash.rotation.z = Math.random() * Math.PI;
 setTimeout(() => flash.visible = false, 50); muzzleLight.intensity = 5;
 setTimeout(() => muzzleLight.intensity = 0, 60); const PELLETS = 7;
