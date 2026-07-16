@@ -154,19 +154,20 @@ function makeTex(type) {
   } else if (type === 'wood') {
     ctx.fillStyle = '#3e2723'; ctx.fillRect(0,0,size,size);
   } else if (type === 'zFace') {
-    ctx.fillStyle = '#7a8075'; ctx.fillRect(0,0,size,size); 
-    // Red glowing eyes
-    ctx.fillStyle = '#ff0000'; ctx.fillRect(8, 12, 4, 4); ctx.fillRect(20, 12, 4, 4);
-    // Bloody gaping mouth
-    ctx.fillStyle = '#220000'; ctx.fillRect(10, 20, 12, 8);
+    // Pale rotting flesh with heavy blood around the jaw
+    ctx.fillStyle = '#6e5a55'; ctx.fillRect(0,0,size,size); 
+    ctx.fillStyle = '#4a0000'; ctx.fillRect(0, 20, size, 12); // Bloody mouth/neck
+    ctx.fillStyle = '#111'; ctx.fillRect(6, 10, 6, 6); ctx.fillRect(20, 10, 6, 6); // Hollow eyes
+    ctx.fillStyle = '#fff'; ctx.fillRect(8, 12, 2, 2); ctx.fillRect(22, 12, 2, 2); // Tiny glint
   } else if (type === 'zUniform') {
-    // Tattered grey uniform
+    // Tattered clothes heavily soaked in blood
     ctx.fillStyle = '#3b423f'; ctx.fillRect(0,0,size,size);
-    ctx.fillStyle = '#212624'; ctx.fillRect(0, 0, size, 6); 
-    // Blood stains
-    ctx.fillStyle = '#4a0000'; ctx.fillRect(4, 14, 8, 10);
+    ctx.fillStyle = '#4a0000'; 
+    ctx.fillRect(4, 4, 24, 20); // Massive chest blood stain
+    ctx.fillRect(0, 24, size, 8); // Bloody bottom trim
   } else if (type === 'zFlesh') {
-    ctx.fillStyle = '#7a8075'; ctx.fillRect(0,0,size,size);
+    ctx.fillStyle = '#6e5a55'; ctx.fillRect(0,0,size,size);
+    ctx.fillStyle = '#4a0000'; ctx.fillRect(0,0,size,10); // Bloody joint ends
   } else if (type === 'gunMetal') {
     ctx.fillStyle = '#333'; ctx.fillRect(0,0,size,size);
   } else if (type === 'skin') {
@@ -293,7 +294,7 @@ stock.position.set(0.25, -0.28, 0.15); stock.rotation.x = -0.15; vmShotgun.add(s
 const flash = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6), new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, side: THREE.DoubleSide }));
 flash.position.set(0.25, -0.22, -1.2); flash.visible = false; vmShotgun.add(flash);
 
-// Blocky Fists
+// Blocky Fists (Kept blocky as requested per typical FPS viewmodels)
 const hLeft = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.35), matSkin);
 hLeft.position.set(-0.35, -0.25, -0.4); vmHands.add(hLeft);
 const hRight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.35), matSkin);
@@ -305,14 +306,28 @@ camera.add(viewmodel);
 scene.add(camera);
 
 // ------------------------------------------------------------------
-// PROCEDURAL LOW POLY ZOMBIES 
+// PROCEDURAL FLESHY HUMAN-LIKE ZOMBIES
 // ------------------------------------------------------------------
 const zombies = [];
 let targets = [];
 
-function makeBone(w, h, d, mat, shiftY) {
-  const geo = new THREE.BoxGeometry(w, h, d);
+// Mangles perfect geometric shapes to look like rotting flesh
+function mangleGeometry(geo, amount) {
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    pos.setX(i, pos.getX(i) + (Math.random() - 0.5) * amount);
+    pos.setY(i, pos.getY(i) + (Math.random() - 0.5) * amount);
+    pos.setZ(i, pos.getZ(i) + (Math.random() - 0.5) * amount);
+  }
+  geo.computeVertexNormals();
+}
+
+// Replaces boxes with deformed cylinders to look like limbs/torsos
+function makeOrganicLimb(radiusTop, radiusBottom, height, mat, shiftY, isTorso = false) {
+  const geo = new THREE.CylinderGeometry(radiusTop, radiusBottom, height, 8, 5);
+  if (isTorso) geo.scale(1, 1, 0.5); // Flatten the chest so it's not a tube
   geo.translate(0, shiftY, 0); 
+  mangleGeometry(geo, 0.05); // Deform the flesh
   const m = new THREE.Mesh(geo, mat);
   m.castShadow = true; m.receiveShadow = true;
   return m;
@@ -326,31 +341,34 @@ function spawnZombie(x, z, spdMult) {
   const mUniform = matZUniform.clone();
   const mFlesh = matZFlesh.clone();
 
-  // Torso
-  const torso = makeBone(0.5, 0.7, 0.3, mUniform, 0);
+  // Torso - Flat curved cylinder
+  const torso = makeOrganicLimb(0.28, 0.22, 0.75, mUniform, 0, true);
   torso.position.y = 1.0;
   
-  // Head
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), mFace);
-  head.position.y = 0.55; 
+  // Head - Deformed sphere
+  const headGeo = new THREE.SphereGeometry(0.2, 12, 12);
+  headGeo.translate(0, 0.15, 0); // Pivot at the neck
+  mangleGeometry(headGeo, 0.035);
+  const head = new THREE.Mesh(headGeo, mFace);
+  head.position.y = 0.35; 
   head.castShadow = true; 
   torso.add(head);
 
-  // Arms 
-  const aL = makeBone(0.15, 0.7, 0.15, mUniform, -0.35);
+  // Arms - Thin, mangled cylinders
+  const aL = makeOrganicLimb(0.08, 0.06, 0.7, mFlesh, -0.35);
   aL.position.set(-0.35, 0.25, 0); 
   torso.add(aL);
   
-  const aR = makeBone(0.15, 0.7, 0.15, mUniform, -0.35);
+  const aR = makeOrganicLimb(0.08, 0.06, 0.7, mFlesh, -0.35);
   aR.position.set(0.35, 0.25, 0); 
   torso.add(aR);
 
   // Legs 
-  const lL = makeBone(0.18, 0.8, 0.18, mUniform, -0.4);
+  const lL = makeOrganicLimb(0.12, 0.09, 0.8, mUniform, -0.4);
   lL.position.set(-0.15, 0.8, 0); 
   zGroup.add(lL);
   
-  const lR = makeBone(0.18, 0.8, 0.18, mUniform, -0.4);
+  const lR = makeOrganicLimb(0.12, 0.09, 0.8, mUniform, -0.4);
   lR.position.set(0.15, 0.8, 0); 
   zGroup.add(lR);
 
