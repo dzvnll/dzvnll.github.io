@@ -2,89 +2,86 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>DEAD HALLS</title>
+<title>DEAD HALLS: PORTABLE</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; overflow:hidden; background:#000; font-family:'Courier New', monospace; }
-  canvas { display:block; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; }
+  
+  /* Forces the canvas to upscale with crisp, chunky pixels instead of blurring */
+  canvas { 
+    display:block; 
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+  }
+
+  /* Retro NZP/Zombies style HUD */
+  #hud {
+    position: fixed; inset: 0; pointer-events: none; z-index: 10;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: bold; text-transform: uppercase;
+  }
+
+  .hud-text {
+    position: absolute;
+    color: #ff2222;
+    text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+  }
+
+  #round { bottom: 20px; left: 20px; font-size: 48px; color: #fff; }
+  #points { bottom: 20px; right: 20px; font-size: 32px; color: #ffca28; }
+  #ammo { bottom: 60px; right: 20px; font-size: 24px; color: #fff; }
 
   #crosshair {
-    position:fixed; top:50%; left:50%; width:6px; height:6px;
-    background:rgba(255,0,0,0.85); border-radius:50%;
+    position:fixed; top:50%; left:50%; width: 4px; height: 4px;
+    background: #fff;
     transform:translate(-50%,-50%); z-index:15; pointer-events:none;
-    box-shadow:0 0 4px rgba(255,0,0,0.8);
   }
 
   #lookTip {
-    position:fixed; top:18px; left:50%; transform:translateX(-50%);
-    color:#bbb; font-size:0.8em; background:rgba(0,0,0,0.45);
-    padding:6px 14px; border-radius:4px; z-index:15; opacity:1;
-    transition:opacity 0.6s ease; pointer-events:none; letter-spacing:1px;
+    position:fixed; top:20px; left:50%; transform:translateX(-50%);
+    color:#fff; font-size:16px; background:rgba(0,0,0,0.8);
+    padding:8px 12px; z-index:15;
+    font-family: 'Courier New', Courier, monospace;
+    border: 2px solid #555; transition: opacity 0.3s;
   }
   #lookTip.hide { opacity:0; }
-
-  #hint {
-    position:fixed; bottom:6%; left:50%; transform:translateX(-50%);
-    color:#ddd; font-size:0.95em; background:rgba(0,0,0,0.55);
-    padding:8px 16px; border-radius:4px; z-index:15; opacity:0;
-    transition:opacity 0.4s ease; pointer-events:none; letter-spacing:1px;
-  }
-  #hint.show { opacity:1; }
-
-  #vignette {
-    position:fixed; inset:0; pointer-events:none; z-index:10;
-    box-shadow: inset 0 0 180px 60px rgba(0,0,0,0.85);
-  }
-
-  /* cheap CSS-only haze/grain overlay -- zero render cost, no per-frame canvas work */
-  #grade {
-    position:fixed; inset:0; pointer-events:none; z-index:11;
-    background:
-      radial-gradient(ellipse at center, rgba(150,160,150,0.06) 0%, rgba(0,0,0,0.35) 100%);
-    mix-blend-mode:overlay;
-    opacity:0.6;
-  }
 </style>
 </head>
 <body>
 
-<div id="lookTip">WASD to move &nbsp;·&nbsp; Arrow Keys or mouse to look &nbsp;·&nbsp; click to enable mouse-look</div>
+<div id="hud">
+  <div class="hud-text" id="round"><span style="color:#d00;">|||</span></div>
+  <div class="hud-text" id="points">500</div>
+  <div class="hud-text" id="ammo">8 / 32</div>
+</div>
 
+<div id="lookTip">CLICK TO LOCK MOUSE<br>WASD to Move</div>
 <div id="crosshair"></div>
-<div id="vignette"></div>
-<div id="grade"></div>
-<div id="hint"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // ------------------------------------------------------------------
-// SETUP
+// SETUP (RETRO QUAKE / PS1 STYLE ENGINE)
 // ------------------------------------------------------------------
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x15181a, 0.045); // cool desaturated haze, not flat black
-scene.background = new THREE.Color(0x15181a);
+scene.background = new THREE.Color(0x0a0c10);
+// Dark, heavy fog to hide the end of the courtyard and add PS1-era atmosphere
+scene.fog = new THREE.Fog(0x0a0c10, 2, 25); 
 
-const camera = new THREE.PerspectiveCamera(120, window.innerWidth/window.innerHeight, 0.01, 1000);
+const camera = new THREE.PerspectiveCamera(90, window.innerWidth/window.innerHeight, 0.05, 100);
 camera.rotation.order = 'YXZ';
-camera.position.set(0, 1.7, 3);
+camera.position.set(0, 1.6, 2);
 
-// LOW_RES_SCALE renders internally at a lower resolution then the browser
-// upscales it to fill the screen via CSS -- this is the single biggest lever
-// for frame rate on weak/integrated GPUs. Lower it further (e.g. 0.5) if it's
-// still choppy.
-const LOW_RES_SCALE = 0.65;
+// LOW_RES_SCALE crushes the resolution to create the chunky Quake/NZP look
+const LOW_RES_SCALE = 0.33; 
 
 const renderer = new THREE.WebGLRenderer({ antialias:false, powerPreference:'low-power' });
 renderer.setPixelRatio(1);
-renderer.shadowMap.enabled = false; // real-time shadows are the main perf killer -- keep off
-
-// Tone mapping + correct color output: this costs nothing extra per-frame
-// (it's one small math op tacked onto the shader's existing final step) but
-// gives a big jump in perceived realism -- proper highlight rolloff and
-// contrast instead of the flat, washed-out default look.
-renderer.outputEncoding = THREE.sRGBEncoding;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+// Disable tone mapping to keep lighting raw, harsh, and retro
+renderer.outputEncoding = THREE.LinearEncoding; 
+renderer.toneMapping = THREE.NoToneMapping;
 
 document.body.appendChild(renderer.domElement);
 renderer.domElement.style.width = '100%';
@@ -93,518 +90,329 @@ renderer.domElement.style.height = '100%';
 function resizeRenderer(){
   const w = Math.floor(window.innerWidth * LOW_RES_SCALE);
   const h = Math.floor(window.innerHeight * LOW_RES_SCALE);
-  renderer.setSize(w, h, false); // false = don't touch CSS size, keep it fullscreen
+  renderer.setSize(w, h, false);
   camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
 }
 resizeRenderer();
-
 window.addEventListener('resize', resizeRenderer);
 
 // ------------------------------------------------------------------
-// TEXTURES (procedural blood-stained walls / floor)
+// PIXELATED RETRO TEXTURES
 // ------------------------------------------------------------------
-function makeStainedTexture({ base='#d8d4cf', bloodAmount=18, size=256, floor=false, splatterScale=1 }) {
+// Generates harsh, low-res (64x64) textures typical of 90s shooters
+function makeRetroTex(type) {
+  const size = 64;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
 
-  ctx.fillStyle = base;
+  if (type === 'wall') ctx.fillStyle = '#444';
+  if (type === 'wall2') ctx.fillStyle = '#3a2d2d';
+  if (type === 'floor') ctx.fillStyle = '#222';
+  if (type === 'dirt') ctx.fillStyle = '#1c1612';
   ctx.fillRect(0,0,size,size);
 
-  // subtle grime/noise
-  for (let i=0;i<3000;i++){
-    const v = Math.random()*40;
-    ctx.fillStyle = `rgba(${v},${v},${v},0.03)`;
-    ctx.fillRect(Math.random()*size, Math.random()*size, 2, 2);
+  // Chunky pixel noise
+  for(let i=0; i<400; i++) {
+    let v = Math.random();
+    ctx.fillStyle = v > 0.5 ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.15)';
+    let sz = v > 0.8 ? 4 : 2; 
+    let x = Math.floor(Math.random()*(size/sz))*sz;
+    let y = Math.floor(Math.random()*(size/sz))*sz;
+    ctx.fillRect(x,y,sz,sz);
   }
 
-  function splat(x, y, r, alpha) {
-    ctx.save();
-    ctx.translate(x,y);
-    ctx.rotate(Math.random()*Math.PI*2);
-    const grad = ctx.createRadialGradient(0,0,0,0,0,r);
-    grad.addColorStop(0, `rgba(90,0,0,${alpha})`);
-    grad.addColorStop(0.5, `rgba(120,0,0,${alpha*0.7})`);
-    grad.addColorStop(1, `rgba(60,0,0,0)`);
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.ellipse(0,0, r, r*(0.5+Math.random()*0.5), 0, 0, Math.PI*2);
-    ctx.fill();
-    // drips
-    const drips = 2 + Math.floor(Math.random()*4);
-    for (let d=0; d<drips; d++){
-      const dx = (Math.random()-0.5)*r*1.4;
-      const len = r*(0.8+Math.random()*2.2);
-      ctx.fillStyle = `rgba(80,0,0,${alpha*0.8})`;
-      ctx.beginPath();
-      ctx.ellipse(dx, r*0.3, r*0.06, len*0.5, 0,0,Math.PI*2);
-      ctx.fill();
+  // Draw chunky panel/tile outlines
+  if (type === 'wall' || type === 'wall2') {
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, 0, size, 2);
+    ctx.fillRect(0, 0, 2, size);
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillRect(0, size-2, size, 2);
+    ctx.fillRect(size-2, 0, 2, size);
+  } else if (type === 'floor') {
+    ctx.fillStyle = 'rgba(0,0,0,0.9)';
+    ctx.fillRect(0, 0, size, 2);
+    ctx.fillRect(0, 32, size, 2);
+    ctx.fillRect(0, 0, 2, size);
+    ctx.fillRect(32, 0, 2, size);
+  }
+
+  // Fake baked-in blood spatters
+  if (Math.random() > 0.5 && type !== 'dirt') {
+    ctx.fillStyle = 'rgba(90, 0, 0, 0.6)';
+    for(let i=0; i<8; i++) {
+       let bx = Math.random()*size;
+       let by = Math.random()*size;
+       ctx.fillRect(bx, by, 4 + Math.random()*6, 4 + Math.random()*6);
     }
-    ctx.restore();
-  }
-
-  for (let i=0;i<bloodAmount;i++){
-    const x = Math.random()*size;
-    const y = floor ? Math.random()*size : size*0.3 + Math.random()*size*0.7;
-    const r = (10 + Math.random()*40) * splatterScale;
-    splat(x,y,r, 0.55+Math.random()*0.35);
-  }
-
-  // handprint-ish smear occasionally
-  if (Math.random() < 0.9) {
-    ctx.save();
-    ctx.translate(size*(0.2+Math.random()*0.6), size*(0.3+Math.random()*0.5));
-    ctx.rotate(Math.random()*Math.PI);
-    ctx.fillStyle = 'rgba(70,0,0,0.5)';
-    for (let f=0; f<5; f++){
-      ctx.beginPath();
-      ctx.ellipse(f*14-28, 0, 7, 26, 0.3, 0, Math.PI*2);
-      ctx.fill();
-    }
-    ctx.restore();
   }
 
   const tex = new THREE.CanvasTexture(canvas);
+  // NEAREST FILTER disables all modern blurring. This makes it look like PS1/Quake.
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   return tex;
 }
 
-const wallTexA = makeStainedTexture({ bloodAmount:10 });
-const wallTexB = makeStainedTexture({ bloodAmount:14 });
-const floorTex = makeStainedTexture({ bloodAmount:26, floor:true, base:'#cfcac2', splatterScale:1.3 });
-const ceilTex  = makeStainedTexture({ bloodAmount:4, base:'#e6e3dd' });
+const texWall1 = makeRetroTex('wall');
+const texWall2 = makeRetroTex('wall2');
+const texFloor = makeRetroTex('floor');
+const texDirt  = makeRetroTex('dirt');
 
-// diffuse/color textures need sRGB encoding to look correct once tone
-// mapping is on -- this is a load-time flag, not a per-frame cost
-[wallTexA, wallTexB, floorTex, ceilTex].forEach(t => t.encoding = THREE.sRGBEncoding);
+// flatShading: true gives hard polygon edges on models
+const matWall1 = new THREE.MeshLambertMaterial({ map: texWall1, flatShading: true });
+const matWall2 = new THREE.MeshLambertMaterial({ map: texWall2, flatShading: true });
+const matFloor = new THREE.MeshLambertMaterial({ map: texFloor, flatShading: true });
+const matDirt  = new THREE.MeshLambertMaterial({ map: texDirt, flatShading: true });
 
-// mild anisotropic filtering keeps the floor from turning into a blurry
-// smear at grazing angles -- modern GPU texture units (including
-// integrated ones) do this in hardware, so it's a very cheap upgrade;
-// clamped to 4 (instead of the device max) to stay safe on older cards
-const aniso = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-[wallTexA, wallTexB, floorTex, ceilTex].forEach(t => t.anisotropy = aniso);
+function box(w, h, d, mat) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  return new THREE.Mesh(geo, mat);
+}
 
-// ------------------------------------------------------------------
-// SHARED BUMP MAP -- a small (128px) grayscale grunge/crack texture used
-// as a bumpMap on every surface. This is generated once at load (zero
-// per-frame cost) and adds a lot of "real surface" feel under the point
-// lights for the price of one extra texture sample per pixel in the
-// fragment shader -- trivial even on integrated GPUs.
-// ------------------------------------------------------------------
-function makeBumpTexture(size=128) {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#808080'; // neutral mid-gray = no bump
-  ctx.fillRect(0,0,size,size);
+function addWall(x, z, w, d, mat) {
+  const h = 4.2;
+  const m = box(w, h, d, mat);
+  m.position.set(x, h/2, z);
+  scene.add(m);
+  return m;
+}
 
-  for (let i=0;i<900;i++){
-    const v = 95 + Math.random()*90;
-    ctx.fillStyle = `rgb(${v},${v},${v})`;
-    ctx.fillRect(Math.random()*size, Math.random()*size, 1.5, 1.5);
+function addFloor(x, z, w, d, mat, hasCeil=true) {
+  const f = box(w, 0.2, d, mat);
+  f.position.set(x, -0.1, z);
+  scene.add(f);
+  if (hasCeil) {
+    const c = box(w, 0.2, d, matWall1);
+    c.position.set(x, 4.3, z);
+    scene.add(c);
   }
-
-  ctx.strokeStyle = 'rgba(40,40,40,0.55)';
-  ctx.lineWidth = 1;
-  for (let c=0;c<7;c++){
-    let x = Math.random()*size, y = Math.random()*size;
-    ctx.beginPath();
-    ctx.moveTo(x,y);
-    for (let s=0;s<5;s++){
-      x += (Math.random()-0.5)*30;
-      y += (Math.random()-0.5)*30;
-      ctx.lineTo(x,y);
-    }
-    ctx.stroke();
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  return tex;
-}
-const sharedBump = makeBumpTexture();
-
-const wallMatA = new THREE.MeshPhongMaterial({ map: wallTexA, bumpMap: sharedBump, bumpScale: 0.02, shininess: 12, specular: 0x141414 });
-const wallMatB = new THREE.MeshPhongMaterial({ map: wallTexB, bumpMap: sharedBump, bumpScale: 0.02, shininess: 12, specular: 0x141414 });
-const floorMat = new THREE.MeshPhongMaterial({ map: floorTex, bumpMap: sharedBump, bumpScale: 0.025, shininess: 28, specular: 0x2a2a2a }); // slightly wetter/shinier -- blood on a floor catches more light
-const ceilMat  = new THREE.MeshPhongMaterial({ map: ceilTex, bumpMap: sharedBump, bumpScale: 0.015, shininess: 8, specular: 0x0f0f0f });
-
-// ------------------------------------------------------------------
-// ROOM DIMENSIONS
-// Room 1 (player room):  x -5..5   z -1..9    (player starts z=3)
-// Divider wall at z = 9, with a viewing hole
-// Room 2 (beyond):        z 9..19  (player can never actually cross into it)
-// ------------------------------------------------------------------
-const ROOM_W = 10;     // x: -5..5
-const HEIGHT = 4.2;
-const ROOM1_Z0 = -1, ROOM1_Z1 = 9;
-const DIVIDER_Z = 9;
-const ROOM2_Z1 = 19;
-
-function box(w,h,d,mat){ return new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat); }
-
-// --- Room 1 floor / ceiling ---
-const floor1 = box(ROOM_W, 0.2, ROOM1_Z1-ROOM1_Z0, floorMat);
-floor1.position.set(0, -0.1, (ROOM1_Z0+ROOM1_Z1)/2);
-
-scene.add(floor1);
-
-const ceil1 = box(ROOM_W, 0.2, ROOM1_Z1-ROOM1_Z0, ceilMat);
-ceil1.position.set(0, HEIGHT+0.1, (ROOM1_Z0+ROOM1_Z1)/2);
-scene.add(ceil1);
-
-// --- Room 1 side walls ---
-const wallL = box(0.2, HEIGHT, ROOM1_Z1-ROOM1_Z0, wallMatA);
-wallL.position.set(-5, HEIGHT/2, (ROOM1_Z0+ROOM1_Z1)/2);
-scene.add(wallL);
-
-const wallR = box(0.2, HEIGHT, ROOM1_Z1-ROOM1_Z0, wallMatA);
-wallR.position.set(5, HEIGHT/2, (ROOM1_Z0+ROOM1_Z1)/2);
-scene.add(wallR);
-
-// --- Back wall (behind player spawn) with the door ---
-const backWall = box(ROOM_W, HEIGHT, 0.2, wallMatB);
-backWall.position.set(0, HEIGHT/2, ROOM1_Z0);
-scene.add(backWall);
-
-// Door: frame + a dark door slab, leads nowhere for now
-const doorGroup = new THREE.Group();
-const doorFrameMat = new THREE.MeshLambertMaterial({ color:0x1a1a1a });
-const doorMat = new THREE.MeshLambertMaterial({ color:0x2b1b14 });
-
-const doorFrame = box(1.6, 2.8, 0.15, doorFrameMat);
-doorFrame.position.set(0, 1.4, ROOM1_Z0+0.08);
-doorGroup.add(doorFrame);
-
-const doorSlab = box(1.3, 2.5, 0.08, doorMat);
-doorSlab.position.set(0, 1.3, ROOM1_Z0+0.15);
-doorGroup.add(doorSlab);
-
-// door handle
-const handleMat = new THREE.MeshLambertMaterial({ color:0x777770 });
-const handle = new THREE.Mesh(new THREE.SphereGeometry(0.05,12,12), handleMat);
-handle.position.set(0.5, 1.3, ROOM1_Z0+0.2);
-doorGroup.add(handle);
-
-scene.add(doorGroup);
-const DOOR_MESHES = [doorFrame, doorSlab, handle];
-
-// ------------------------------------------------------------------
-// DIVIDER WALL with a viewing hole (built from segments around a gap)
-// Hole: centered at x=0, height range ~1.0 to 2.4 (eye level), width 2.0
-// ------------------------------------------------------------------
-const holeW = 2.0, holeH = 1.4, holeCenterY = 1.7;
-const holeX0 = -holeW/2, holeX1 = holeW/2;
-const holeY0 = holeCenterY - holeH/2, holeY1 = holeCenterY + holeH/2;
-
-const dividerGroup = new THREE.Group();
-
-// left segment (full height, from -5 to holeX0)
-const leftW = holeX0 - (-5);
-const segLeft = box(leftW, HEIGHT, 0.3, wallMatA);
-segLeft.position.set(-5 + leftW/2, HEIGHT/2, DIVIDER_Z);
-dividerGroup.add(segLeft);
-
-// right segment
-const rightW = 5 - holeX1;
-const segRight = box(rightW, HEIGHT, 0.3, wallMatA);
-segRight.position.set(holeX1 + rightW/2, HEIGHT/2, DIVIDER_Z);
-dividerGroup.add(segRight);
-
-// bottom segment (under the hole)
-const segBottom = box(holeW, holeY0, 0.3, wallMatA);
-segBottom.position.set(0, holeY0/2, DIVIDER_Z);
-dividerGroup.add(segBottom);
-
-// top segment (above the hole, up to ceiling)
-const topH = HEIGHT - holeY1;
-const segTop = box(holeW, topH, 0.3, wallMatA);
-segTop.position.set(0, holeY1 + topH/2, DIVIDER_Z);
-dividerGroup.add(segTop);
-
-// jagged edge trim around the hole (torn drywall look)
-const trimMat = new THREE.MeshLambertMaterial({ color:0x8a8378 });
-function torn(x,y,z,w,h,rotY){
-  const m = box(w,h,0.32,trimMat);
-  m.position.set(x,y,z);
-  if (rotY) m.rotation.y = rotY;
-  dividerGroup.add(m);
-}
-for (let i=0;i<10;i++){
-  const t = i/9;
-  const px = holeX0 + t*holeW;
-  torn(px, holeY1 + (Math.random()*0.15), DIVIDER_Z, 0.25+Math.random()*0.2, 0.05+Math.random()*0.2);
-  torn(px, holeY0 - (Math.random()*0.1), DIVIDER_Z, 0.25+Math.random()*0.2, 0.05+Math.random()*0.15);
 }
 
-scene.add(dividerGroup);
+// ------------------------------------------------------------------
+// LEVEL DESIGN & COLLISION ZONES
+// ------------------------------------------------------------------
+const walkableAreas = []; 
+function addZone(minX, maxX, minZ, maxZ) {
+  // We slightly overlap bounds so players don't snag on sector seams
+  walkableAreas.push({ minX: minX-0.2, maxX: maxX+0.2, minZ: minZ-0.2, maxZ: maxZ+0.2 });
+}
+
+// AREA 1: Spawn Room (x: -4 to 4, z: 0 to 8)
+addFloor(0, 4, 8, 8, matFloor);
+addWall(0, -0.5, 9, 1, matWall1);   // Back wall
+addWall(-4.5, 4, 1, 8, matWall1);   // Left wall
+addWall(4.5, 4, 1, 8, matWall1);    // Right wall
+addWall(-3, 8.5, 4, 1, matWall1);   // Front left (makes doorway)
+addWall(3, 8.5, 4, 1, matWall1);    // Front right (makes doorway)
+addZone(-4, 4, 0, 8);
+
+// AREA 2: The Hallway (x: -1 to 1, z: 8 to 18)
+addFloor(0, 13, 2, 10, matFloor);
+addWall(-1.5, 13, 1, 10, matWall2); // Hall left
+addWall(1.5, 13, 1, 10, matWall2);  // Hall right
+addZone(-1, 1, 8, 18);
+
+// AREA 3: The Other Room (x: -5 to 5, z: 18 to 28)
+addFloor(0, 23, 10, 10, matFloor);
+addWall(-3.5, 17.5, 4, 1, matWall1); // Back left connecting to hall
+addWall(3.5, 17.5, 4, 1, matWall1);  // Back right connecting to hall
+addWall(-5.5, 23, 1, 10, matWall1);  // Room left
+addWall(5.5, 23, 1, 10, matWall1);   // Room right
+addWall(-4, 28.5, 4, 1, matWall1);   // Front left (doorway to outside)
+addWall(4, 28.5, 4, 1, matWall1);    // Front right (doorway to outside)
+addZone(-5, 5, 18, 28);
+
+// AREA 4: The Extra Part Outside (x: -8 to 8, z: 28 to 45)
+addFloor(0, 36.5, 16, 17, matDirt, false); // No ceiling, it's outside!
+addWall(-8.5, 36.5, 1, 17, matWall2); // Out left
+addWall(8.5, 36.5, 1, 17, matWall2);  // Out right
+addWall(0, 45.5, 18, 1, matWall2);    // Out Far back
+addWall(-6, 28.5, 4, 1, matWall2);    // Connecting back left
+addWall(6, 28.5, 4, 1, matWall2);     // Connecting back right
+addZone(-8, 8, 28, 44);
+
+// The Door (Ajar, leading outside)
+const matWood = new THREE.MeshLambertMaterial({ color: 0x3d2a1d, flatShading: true });
+const door = box(2.8, 3.8, 0.2, matWood);
+door.position.set(-1.2, 1.9, 29);
+door.rotation.y = Math.PI * 0.25; // Kicked open
+scene.add(door);
+
+// Props (Mystery Box outside)
+const mbox = box(2.4, 0.8, 0.8, matWood);
+mbox.position.set(0, 0.4, 38);
+scene.add(mbox);
+const mboxLid = box(2.4, 0.1, 0.8, matWood);
+mboxLid.position.set(0, 0.85, 38);
+mboxLid.rotation.x = -0.3; // slightly open
+scene.add(mboxLid);
 
 // ------------------------------------------------------------------
-// ROOM 2 (seen through the hole, unreachable) - dim, foggier, decayed
+// RETRO ZOMBIES (Low-poly static actors)
 // ------------------------------------------------------------------
-const room2Mat = new THREE.MeshLambertMaterial({ map: wallTexB, color:0x9a9490 });
-
-const floor2 = box(ROOM_W, 0.2, ROOM2_Z1-DIVIDER_Z, floorMat);
-floor2.position.set(0, -0.1, (DIVIDER_Z+ROOM2_Z1)/2);
-scene.add(floor2);
-
-const ceil2 = box(ROOM_W, 0.2, ROOM2_Z1-DIVIDER_Z, ceilMat);
-ceil2.position.set(0, HEIGHT+0.1, (DIVIDER_Z+ROOM2_Z1)/2);
-scene.add(ceil2);
-
-const wallL2 = box(0.2, HEIGHT, ROOM2_Z1-DIVIDER_Z, room2Mat);
-wallL2.position.set(-5, HEIGHT/2, (DIVIDER_Z+ROOM2_Z1)/2);
-scene.add(wallL2);
-
-const wallR2 = box(0.2, HEIGHT, ROOM2_Z1-DIVIDER_Z, room2Mat);
-wallR2.position.set(5, HEIGHT/2, (DIVIDER_Z+ROOM2_Z1)/2);
-scene.add(wallR2);
-
-const farWall2 = box(ROOM_W, HEIGHT, 0.2, room2Mat);
-farWall2.position.set(0, HEIGHT/2, ROOM2_Z1);
-scene.add(farWall2);
-
-// a silhouette shape lurking in room 2, just out of clear view
-// (built from cylinder + sphere since CapsuleGeometry needs a newer three.js)
-const lurkMat = new THREE.MeshLambertMaterial({ color:0x050505 });
-const lurkerGroup = new THREE.Group();
-
-const lurkerBody = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.32, 1.3, 10), lurkMat);
-lurkerBody.position.y = 0.65;
-lurkerGroup.add(lurkerBody);
-
-const lurkerHead = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 10), lurkMat);
-lurkerHead.position.y = 1.42;
-lurkerGroup.add(lurkerHead);
-
-lurkerGroup.position.set(2.4, 0.35, DIVIDER_Z + 4.5);
-scene.add(lurkerGroup);
+function addRetroZombie(x, z, rot) {
+  const zGrp = new THREE.Group();
+  const zMat = new THREE.MeshLambertMaterial({ color: 0x38392d, flatShading: true });
+  const skinMat = new THREE.MeshLambertMaterial({ color: 0x5a574b, flatShading: true });
+  
+  const body = box(0.6, 1.0, 0.4, zMat); body.position.y = 0.5; zGrp.add(body);
+  const head = box(0.35, 0.35, 0.35, skinMat); head.position.y = 1.15; zGrp.add(head);
+  const armL = box(0.2, 0.2, 0.7, zMat); armL.position.set(-0.4, 0.8, 0.25); zGrp.add(armL);
+  const armR = box(0.2, 0.2, 0.7, zMat); armR.position.set(0.4, 0.8, 0.35); zGrp.add(armR);
+  
+  zGrp.position.set(x, 0, z);
+  zGrp.rotation.y = rot;
+  scene.add(zGrp);
+  return zGrp;
+}
+addRetroZombie(0, 16, Math.PI);        // Zombie in the hallway
+addRetroZombie(3, 24, -Math.PI/4);     // Zombie in the second room
+addRetroZombie(-4, 35, Math.PI/2);     // Zombie outside
+addRetroZombie(4, 40, -Math.PI*0.8);   // Zombie outside
 
 // ------------------------------------------------------------------
-// VIEWMODEL -- shotgun + forearms, held up diagonally like the reference
-// screenshot. Parented to the camera so it moves/rotates with it for free.
-// Uses proper lit materials (see below) so it's shaded by the room's
-// lighting instead of looking like a flat unlit cutout.
-//
-// Every part is built with makeSegment(), which stretches a cylinder
-// between two exact 3D points and orients it to match. That's the fix for
-// the "pickaxe" look: before, the gun pieces and the arm pieces each had
-// their own hand-guessed rotation, so they pointed in different directions
-// and read as two crossed sticks. Now everything (stock, receiver, barrel,
-// AND both arms) is placed along -- or reaching toward -- one real diagonal
-// line running from the stock near the bottom of the screen up to the
-// muzzle near the top, so it reads as one held object.
+// VIEWMODEL (Low-Poly Shotgun)
 // ------------------------------------------------------------------
 const viewmodel = new THREE.Group();
+const gunMetal = new THREE.MeshLambertMaterial({ color: 0x222222, flatShading: true });
+const gunWood = new THREE.MeshLambertMaterial({ color: 0x4a2e1b, flatShading: true });
+const skin = new THREE.MeshLambertMaterial({ color: 0x6e4e3b, flatShading: true });
 
-// Switched from MeshBasicMaterial (unlit, flat) to lit materials so the
-// gun and arms actually get shaded by the flicker light as you move
-// around -- a big realism jump for almost no cost since this is only a
-// handful of small shapes. Cloth/wood stay matte MeshLambertMaterial;
-// the metal parts get MeshPhongMaterial for a proper specular glint.
-const sleeveMat   = new THREE.MeshLambertMaterial({ color:0x14120f });
-const gunMetalMat = new THREE.MeshPhongMaterial({ color:0x0d0d0d, shininess:70, specular:0x777766 });
-const gunWoodMat  = new THREE.MeshLambertMaterial({ color:0x2a1c10 });
-const handMat     = new THREE.MeshLambertMaterial({ color:0x3a2c22 });
-
-function makeSegment(pStart, pEnd, radiusStart, radiusEnd, material, radialSegments=8){
-  const start = new THREE.Vector3(...pStart);
-  const end = new THREE.Vector3(...pEnd);
-  const dir = new THREE.Vector3().subVectors(end, start);
-  const length = dir.length();
-  const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
-
-  const geo = new THREE.CylinderGeometry(radiusEnd, radiusStart, length, radialSegments);
-  const mesh = new THREE.Mesh(geo, material);
-  mesh.position.copy(mid);
-  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.clone().normalize());
-  return mesh;
+// Using low radialSegments (4 or 5) creates a harsh PS1/Quake prism look
+function lowPolyCyl(r, l, mat) {
+  const geo = new THREE.CylinderGeometry(r, r, l, 5); 
+  geo.rotateX(Math.PI/2);
+  return new THREE.Mesh(geo, mat);
 }
 
-// the gun's centerline, from butt of the stock (near, bottom-right)
-// to the muzzle tip (far, upper area) -- everything else is built relative
-// to points along this one line
-const STOCK_END = [0.30, -0.56, -0.12];
-const MID       = [0.14, -0.20, -0.62];
-const FRONT     = [0.02,  0.10, -1.05];
-const MUZZLE    = [-0.06, 0.30, -1.55];
+const receiver = lowPolyCyl(0.05, 0.4, gunMetal);
+receiver.position.set(0.1, -0.2, -0.6);
+viewmodel.add(receiver);
 
-// stock (wood) -- thick near the shoulder end, narrowing into the receiver
-viewmodel.add(makeSegment(STOCK_END, MID, 0.075, 0.05, gunWoodMat, 8));
+const barrel = lowPolyCyl(0.03, 0.6, gunMetal);
+barrel.position.set(0.1, -0.17, -1.0);
+viewmodel.add(barrel);
 
-// receiver / pump housing (fatter dark metal block along the same line)
-viewmodel.add(makeSegment(MID, FRONT, 0.06, 0.055, gunMetalMat, 8));
+const pump = lowPolyCyl(0.055, 0.25, gunWood);
+pump.position.set(0.1, -0.22, -0.9);
+viewmodel.add(pump);
 
-// barrel (thin metal, tapering slightly toward the muzzle)
-viewmodel.add(makeSegment(FRONT, MUZZLE, 0.032, 0.024, gunMetalMat, 10));
+const stock = lowPolyCyl(0.06, 0.4, gunWood);
+stock.position.set(0.1, -0.28, -0.2);
+stock.rotation.x = -0.2;
+viewmodel.add(stock);
 
-// muzzle bead sight
-const bead = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 8), gunMetalMat);
-bead.position.set(...MUZZLE);
-viewmodel.add(bead);
-
-// trigger guard, hanging just under the receiver
-const guard = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.008, 6, 10), gunMetalMat);
-guard.position.set(MID[0]+0.01, MID[1]-0.07, MID[2]+0.04);
-guard.rotation.x = Math.PI/2;
-viewmodel.add(guard);
-
-// right forearm -- reaches from off-screen bottom-right up to the
-// receiver/trigger area, matching the gun's own diagonal rather than
-// crossing against it
-const RIGHT_SHOULDER = [0.42, -0.95, -0.05];
-const GRIP_R = [MID[0]+0.05, MID[1]-0.04, MID[2]+0.05];
-viewmodel.add(makeSegment(RIGHT_SHOULDER, GRIP_R, 0.075, 0.06, sleeveMat));
-const handR = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 8), handMat);
-handR.position.set(...GRIP_R);
-viewmodel.add(handR);
-
-// left forearm -- reaches up to the front grip / pump, further out along
-// the same barrel line, giving the classic "supporting hand forward" pose
-const LEFT_SHOULDER = [-0.30, -0.9, -0.05];
-const GRIP_L = [FRONT[0]-0.03, FRONT[1]-0.05, FRONT[2]+0.05];
-viewmodel.add(makeSegment(LEFT_SHOULDER, GRIP_L, 0.07, 0.055, sleeveMat));
-const handL = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), handMat);
-handL.position.set(...GRIP_L);
-viewmodel.add(handL);
+// Blocky fist (support hand)
+const fist = box(0.12, 0.12, 0.12, skin);
+fist.position.set(0.1, -0.25, -0.9);
+fist.rotation.z = Math.PI/4;
+viewmodel.add(fist);
 
 camera.add(viewmodel);
-scene.add(camera); // camera must be in the scene graph for its children (viewmodel) to render
-
-let swayT = 0;
+scene.add(camera);
 
 // ------------------------------------------------------------------
-// LIGHTING
+// LIGHTING (Harsh, localized, retro)
 // ------------------------------------------------------------------
-// HemisphereLight costs exactly the same as AmbientLight (one uniform,
-// no shadow, no extra pass) but blends a cool "sky" tone from above with a
-// dim bloody "ground" tone from below, instead of one flat gray -- reads
-// as much more like real bounced light for zero extra performance.
-const hemi = new THREE.HemisphereLight(0x8a97a0, 0x2a1210, 0.6);
-scene.add(hemi);
+scene.add(new THREE.AmbientLight(0x1a1210)); 
 
-const flicker = new THREE.PointLight(0xffe8c0, 1.4, 12, 2);
-flicker.position.set(0, 3.8, 2.5);
+// Spawn Room light
+const l1 = new THREE.PointLight(0xffa550, 1.2, 12);
+l1.position.set(0, 3.5, 4);
+scene.add(l1);
 
-scene.add(flicker);
+// Hallway light (reddish/creepy)
+const l2 = new THREE.PointLight(0xff2010, 1.0, 8);
+l2.position.set(0, 3.5, 13);
+scene.add(l2);
 
-const room2Light = new THREE.PointLight(0x2a1010, 0.6, 10, 2);
-room2Light.position.set(0, 3, DIVIDER_Z + 5);
-scene.add(room2Light);
+// Room 2 light
+const l3 = new THREE.PointLight(0xffcc88, 1.0, 12);
+l3.position.set(0, 3.5, 23);
+scene.add(l3);
 
-let flickerTime = 0;
-function updateFlicker(dt){
-  flickerTime += dt;
-  const n = Math.sin(flickerTime*37) * Math.sin(flickerTime*13.7);
-  flicker.intensity = 1.1 + n*0.35 + (Math.random()<0.02 ? -0.9 : 0);
-}
+// Outside moonlight (blueish)
+const moon = new THREE.PointLight(0x4466aa, 1.5, 25);
+moon.position.set(0, 8, 35);
+scene.add(moon);
 
 // ------------------------------------------------------------------
-// POINTER LOCK + MOVEMENT
+// MOVEMENT & CONTROLS
 // ------------------------------------------------------------------
-let yaw = 0, pitch = 0;
-let locked = false;
+let yaw = 0, pitch = 0, locked = false;
 
-const lookTip = document.getElementById('lookTip');
 document.body.addEventListener('click', () => {
   if (!locked) document.body.requestPointerLock();
 });
-
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === document.body;
-  if (locked) lookTip.classList.add('hide');
+  if (locked) document.getElementById('lookTip').classList.add('hide');
 });
-
 document.addEventListener('mousemove', (e) => {
   if (!locked) return;
-  const sensitivity = 0.0022;
-  yaw -= e.movementX * sensitivity;
-  pitch -= e.movementY * sensitivity;
-  pitch = Math.max(-Math.PI/2 + 0.01, Math.min(Math.PI/2 - 0.01, pitch));
+  yaw -= e.movementX * 0.0025;
+  pitch -= e.movementY * 0.0025;
+  pitch = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, pitch));
 });
 
 const keys = {};
-const ARROW_KEYS = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
-document.addEventListener('keydown', (e) => {
-  keys[e.code] = true;
-  if (ARROW_KEYS.includes(e.code)) e.preventDefault(); // stop page scroll
-});
-document.addEventListener('keyup', (e) => keys[e.code] = false);
+document.addEventListener('keydown', e => keys[e.code] = true);
+document.addEventListener('keyup', e => keys[e.code] = false);
 
-// raycaster for interacting with the door
-const raycaster = new THREE.Raycaster();
-const hintEl = document.getElementById('hint');
-let hintTimeout = null;
-function showHint(text){
-  hintEl.textContent = text;
-  hintEl.classList.add('show');
-  clearTimeout(hintTimeout);
-  hintTimeout = setTimeout(() => hintEl.classList.remove('show'), 2200);
+function canMove(nx, nz) {
+  for (let z of walkableAreas) {
+    if (nx >= z.minX && nx <= z.maxX && nz >= z.minZ && nz <= z.maxZ) return true;
+  }
+  return false;
 }
 
-document.addEventListener('mousedown', (e) => {
-  if (!locked || e.button !== 0) return;
-  raycaster.setFromCamera({x:0,y:0}, camera);
-  const hits = raycaster.intersectObjects(DOOR_MESHES);
-  if (hits.length > 0 && hits[0].distance < 3.2) {
-    showHint("It won't open. Not yet.");
-  }
-});
-
-// movement bounds -- player is confined to room 1, and can never
-// physically cross the divider even though they can see through the hole
-const BOUND = { minX:-4.6, maxX:4.6, minZ:ROOM1_Z0+0.5, maxZ:ROOM1_Z1-0.5 };
-
 const clock = new THREE.Clock();
+let sway = 0;
 
 function animate(){
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
 
-  updateFlicker(dt);
-
-  // arrow keys rotate the view (an alternative to mouse-look) --
-  // independent of pointer lock, so they work even before the mouse is enabled
-  const turnSpeed = 1.8; // radians per second
-  if (keys['ArrowLeft'])  yaw += turnSpeed * dt;
-  if (keys['ArrowRight']) yaw -= turnSpeed * dt;
-  if (keys['ArrowUp'])    pitch += turnSpeed * dt;
-  if (keys['ArrowDown'])  pitch -= turnSpeed * dt;
-  pitch = Math.max(-Math.PI/2 + 0.01, Math.min(Math.PI/2 - 0.01, pitch));
-
   camera.rotation.set(pitch, yaw, 0, 'YXZ');
 
-  // movement works immediately, no pointer lock required —
-  // only mouse-look (yaw/pitch above) is gated on lock, via the mousemove listener
-  const speed = (keys['ShiftLeft'] ? 4.2 : 2.6) * dt;
+  const speed = 4.0 * dt;
   const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
   const right = new THREE.Vector3(-forward.z, 0, forward.x);
+  
+  let mx = 0, mz = 0;
+  if (keys['KeyW']) { mx += forward.x; mz += forward.z; }
+  if (keys['KeyS']) { mx -= forward.x; mz -= forward.z; }
+  if (keys['KeyD']) { mx += right.x; mz += right.z; }
+  if (keys['KeyA']) { mx -= right.x; mz -= right.z; }
 
-  const move = new THREE.Vector3();
-  if (keys['KeyW']) move.add(forward);
-  if (keys['KeyS']) move.sub(forward);
-  if (keys['KeyD']) move.add(right);
-  if (keys['KeyA']) move.sub(right);
-  if (move.lengthSq() > 0) move.normalize().multiplyScalar(speed);
+  // Normalize movement vector so diagonals aren't faster
+  const length = Math.sqrt(mx*mx + mz*mz);
+  if (length > 0) {
+    mx = (mx / length) * speed;
+    mz = (mz / length) * speed;
+  }
 
-  camera.position.x += move.x;
-  camera.position.z += move.z;
+  // Slide along walls natively
+  if (canMove(camera.position.x + mx, camera.position.z)) {
+    camera.position.x += mx;
+  }
+  if (canMove(camera.position.x, camera.position.z + mz)) {
+    camera.position.z += mz;
+  }
 
-  camera.position.x = Math.max(BOUND.minX, Math.min(BOUND.maxX, camera.position.x));
-  camera.position.z = Math.max(BOUND.minZ, Math.min(BOUND.maxZ, camera.position.z));
-
-  // subtle head bob
-  const bobT = performance.now()*0.006;
-  const moving = move.lengthSq() > 0;
-  camera.position.y = 1.7 + (moving ? Math.sin(bobT*2)*0.02 : 0);
-
-  // viewmodel sway -- gently drifts and bobs a bit more than the head does,
-  // just enough to feel handheld without any extra render cost
-  swayT += dt;
-  viewmodel.position.x = Math.sin(swayT*0.8) * 0.01;
-  viewmodel.position.y = (moving ? Math.sin(bobT*2)*0.012 : Math.sin(swayT*1.1)*0.004);
+  // Quake-style view bobbing
+  const moving = length > 0;
+  const bobT = performance.now() * 0.008;
+  camera.position.y = 1.6 + (moving ? Math.sin(bobT) * 0.04 : 0);
+  
+  sway += dt;
+  viewmodel.position.x = Math.sin(sway * 1.5) * 0.005;
+  viewmodel.position.y = (moving ? Math.abs(Math.sin(bobT)) * 0.015 : 0);
 
   renderer.render(scene, camera);
 }
