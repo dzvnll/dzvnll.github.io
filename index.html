@@ -128,7 +128,6 @@
         let actx = null;
         function ensureAudio() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); }
         
-        // Realistic Audio Synthesis
         function playShot(type = "shotgun") {
             ensureAudio();
             const t = actx.currentTime;
@@ -228,19 +227,18 @@
         }
         window.addEventListener('resize', resize); resize();
 
-        // Realistic Procedural Dark Textures
         function makeTex(type) {
             const size = 64; const c = document.createElement('canvas'); c.width = size; c.height = size;
             const ctx = c.getContext('2d');
             if (type === 'wall') {
-                ctx.fillStyle = '#1c1d21'; // Dark modular concrete plating
+                ctx.fillStyle = '#1c1d21';
                 ctx.fillRect(0,0,size,size);
                 ctx.fillStyle = '#0f1012';
                 ctx.fillRect(0, 0, size, 2);
                 ctx.fillRect(0, size-2, size, 2);
                 ctx.fillRect(size/2, 0, 2, size);
             } else if (type === 'floor') {
-                ctx.fillStyle = '#24262b'; // Slate gray panel with rivets
+                ctx.fillStyle = '#24262b';
                 ctx.fillRect(0,0,size,size);
                 ctx.fillStyle = '#141518';
                 ctx.strokeRect(1, 1, size-2, size-2);
@@ -254,21 +252,9 @@
             } else if (type === 'barrier') {
                 ctx.fillStyle = '#472d1a'; ctx.fillRect(0,0,size,size);
                 ctx.fillStyle = '#311e11'; for (let i=0;i<size;i+=16) ctx.fillRect(i,0,4,size);
-            } else if (type === 'zFace') {
-                ctx.fillStyle = '#4f5247'; ctx.fillRect(0,0,size,size);
-                ctx.fillStyle = '#330000'; ctx.fillRect(0, 40, size, 12);
-                ctx.fillStyle = '#111'; ctx.fillRect(12, 20, 12, 12); ctx.fillRect(40, 20, 12, 12);
-            } else if (type === 'zUniform') {
-                ctx.fillStyle = '#2b302d'; ctx.fillRect(0,0,size,size);
-            } else if (type === 'zFlesh') {
-                ctx.fillStyle = '#4f5247'; ctx.fillRect(0,0,size,size);
-            } else if (type === 'gunMetal') {
-                ctx.fillStyle = '#111113'; ctx.fillRect(0,0,size,size);
-            } else if (type === 'skin') {
-                ctx.fillStyle = '#ab8b74'; ctx.fillRect(0,0,size,size);
             } else if (type === 'chalkPistol' || type === 'chalkShotgun' || type === 'chalkAR') {
                 ctx.fillStyle = 'rgba(255,255,255,0)'; ctx.fillRect(0,0,size,size);
-                ctx.fillStyle = 'rgba(255,255,255,0.75)';
+                ctx.fillStyle = 'rgba(255,255,255,0.88)';
                 if (type === 'chalkPistol') {
                     ctx.fillRect(10, 20, 20, 8); ctx.fillRect(24, 28, 6, 16);
                 } else if (type === 'chalkShotgun') {
@@ -281,8 +267,8 @@
                 const x = Math.floor(Math.random() * (size/2)) * 2; const y = Math.floor(Math.random() * (size/2)) * 2;
                 const r = Math.random();
                 if (r > 0.6) ctx.fillStyle = 'rgba(0,0,0,0.4)';
-                else if (r > 0.3) ctx.fillStyle = 'rgba(255,255,255,0.06)';
-                else ctx.fillStyle = 'rgba(100,0,0,0.15)';
+                else if (r > 0.3) ctx.fillStyle = 'rgba(255,255,255,0.08)';
+                else ctx.fillStyle = 'rgba(100,0,0,0.18)';
                 ctx.fillRect(x, y, 2, 2);
             }
             const tex = new THREE.CanvasTexture(c);
@@ -340,9 +326,9 @@
             new THREE.Vector3(0, 0, 40),
             new THREE.Vector3(-13, 0, 20),
             new THREE.Vector3(-13, 0, 5),
-            new THREE.Vector3(30, 0, 30), // Warehouse Spawns
+            new THREE.Vector3(30, 0, 30),
             new THREE.Vector3(25, 0, 45),
-            new THREE.Vector3(-20, 0, 41) // Control Room Spawn
+            new THREE.Vector3(-20, 0, 41)
         ];
 
         function addWall(x, z, w, d, id) {
@@ -362,8 +348,6 @@
             }
         }
 
-        // --- MAP DESIGN & COORDINATE MATRIX ---
-        // Spawn Room
         addFloor(0, 4, 10, 10, matFloor);
         addWall(0, -1.5, 10, 1);
         addWall(-5.5, 4, 1, 10);
@@ -371,62 +355,53 @@
         addWall(-3.5, 9.5, 4, 1);
         addWall(3.5, 9.5, 4, 1);
 
-        // Hallway (Weapon 1 Pistol Ammo buy located here)
         addFloor(0, 15, 4, 10, matFloor);
         addWall(-2.5, 15, 1, 10);
         addWall(2.5, 15, 1, 10);
 
-        // Transition Lobby
         addFloor(0, 25, 12, 10, matFloor);
         addWall(-4.5, 19.5, 5, 1); addWall(4.5, 19.5, 5, 1);
         addWall(-6.5, 25, 1, 10); addWall(6.5, 25, 1, 10);
         addWall(-4, 30.5, 6, 1); addWall(4, 30.5, 6, 1);
 
-        // Dirt Courtyard
         addFloor(0, 41, 20, 20, matDirt, false);
         addWall(-10.5, 41, 1, 22);
-        addWall(10.5, 33.5, 1, 7); // Opening to Warehouse
-        addWall(10.5, 48.5, 1, 7); // Opening to Warehouse
+        addWall(10.5, 33.5, 1, 7);
+        addWall(10.5, 48.5, 1, 7);
         addWall(0, 51.5, 22, 1);
         addWall(-7.5, 30.5, 5, 1); addWall(7.5, 30.5, 5, 1);
 
-        // West corridor
         addFloor(-13, 41, 6, 6, matDirt, false);
         addFloor(-13, 25, 4, 24, matFloor);
         addWall(-15, 25, 1, 24); addWall(-11, 25, 1, 12); addWall(-11, 34.5, 5, 1);
 
-        // Far West Room
         addFloor(-13, 6, 6, 10, matFloor);
         addWall(-15.5, 6, 1, 10); addWall(-10.5, 6, 1, 10);
         addWall(-13, 1.5, 6, 1); addWall(-13, 10.5, 6, 1);
 
-        // Warehouse Extension
         addFloor(28.5, 41, 35, 30, matFloor, false);
         addWall(28.5, 25.5, 36, 1);
         addWall(28.5, 56.5, 36, 1);
-        addWall(46.5, 41, 1, 32); // Outer East wall (Weapon 3 AR buy here)
-        // Obstacles
+        addWall(46.5, 41, 1, 32);
         addWall(22, 35, 4, 4); addWall(34, 46, 6, 4); addWall(40, 32, 3, 8); addWall(20, 48, 4, 4);
 
-        // NEW AREA: The West Office/Control Room Wing
         addFloor(-20, 41, 12, 12, matFloor);
         addWall(-26.5, 41, 1, 12);
         addWall(-20, 34.5, 12, 1);
         addWall(-20, 47.5, 12, 1);
         addWall(-13.5, 37, 1, 6); addWall(-13.5, 45, 1, 6);
 
-        // Boundary Validation Matrix for safe inside-map checks
         function isInsideMapFloor(x, z) {
             const floors = [
-                { x: 0, z: 4, w: 10, d: 10 },        // Spawn Room
-                { x: 0, z: 15, w: 4, d: 10 },       // Hallway
-                { x: 0, z: 25, w: 12, d: 10 },      // Transition Lobby
-                { x: 0, z: 41, w: 20, d: 20 },      // Dirt Courtyard
-                { x: 28.5, z: 41, w: 35, d: 30 },   // Warehouse
-                { x: -13, z: 41, w: 6, d: 6 },      // West Dirt Corridor
-                { x: -13, z: 25, w: 4, d: 24 },     // West Corridor
-                { x: -13, z: 6, w: 6, d: 10 },      // Far West Room
-                { x: -20, z: 41, w: 12, d: 12 }     // New Control Room / Office
+                { x: 0, z: 4, w: 10, d: 10 },
+                { x: 0, z: 15, w: 4, d: 10 },
+                { x: 0, z: 25, w: 12, d: 10 },
+                { x: 0, z: 41, w: 20, d: 20 },
+                { x: 28.5, z: 41, w: 35, d: 30 },
+                { x: -13, z: 41, w: 6, d: 6 },
+                { x: -13, z: 25, w: 4, d: 24 },
+                { x: -13, z: 6, w: 6, d: 10 },
+                { x: -20, z: 41, w: 12, d: 12 }
             ];
             for (let f of floors) {
                 if (x >= f.x - f.w/2 && x <= f.x + f.w/2 && z >= f.z - f.d/2 && z <= f.z + f.d/2) return true;
@@ -434,7 +409,6 @@
             return false;
         }
 
-        // Barrier Door Setup
         let barrierOpen = false;
         const barrierGeo = new THREE.BoxGeometry(4, 4, 0.5); const barrierMesh = new THREE.Mesh(barrierGeo, matBarrier);
         barrierMesh.position.set(-11, 2, 41); barrierMesh.castShadow = true; barrierMesh.receiveShadow = true;
@@ -449,28 +423,28 @@
             playChime();
         }
 
-        // WALLBUY LAYOUT
         const wallbuys = [
-            { x: 0, y: 1.5, z: -1.4, id: 2, cost: 500, ammoCost: 250, name: "Shotgun", type: "chalkShotgun" },
-            { x: 46.4, y: 1.5, z: 41, id: 3, cost: 1200, ammoCost: 600, name: "Assault Rifle", type: "chalkAR" },
-            { x: -2.4, y: 1.5, z: 15, id: 1, cost: 0, ammoCost: 150, name: "Pistol Ammo", type: "chalkPistol" }
+            { x: 0, y: 1.6, z: -1.4, id: 2, cost: 500, ammoCost: 250, name: "Shotgun", type: "chalkShotgun" },
+            { x: 46.4, y: 1.6, z: 41, id: 3, cost: 1200, ammoCost: 600, name: "Assault Rifle", type: "chalkAR" },
+            { x: -2.4, y: 1.6, z: 15, id: 1, cost: 0, ammoCost: 150, name: "Pistol Ammo", type: "chalkPistol" },
+            { x: -20.4, y: 1.6, z: 35, id: 2, cost: 650, ammoCost: 300, name: "Shotgun", type: "chalkShotgun" },
+            { x: 28, y: 1.6, z: 25.5, id: 3, cost: 1100, ammoCost: 550, name: "Assault Rifle", type: "chalkAR" }
         ];
 
         wallbuys.forEach(wb => {
-            const mat = new THREE.MeshBasicMaterial({ map: makeTex(wb.type), transparent: true, side: THREE.DoubleSide });
-            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.8), mat);
+            const mat = new THREE.MeshBasicMaterial({ map: makeTex(wb.type), transparent: true, side: THREE.DoubleSide, depthTest: false });
+            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.0), mat);
             mesh.position.set(wb.x, wb.y, wb.z);
-            if (wb.x === 0) {
-                mesh.rotation.y = 0; mesh.position.z += 0.02;
-            } else if (wb.x === 46.4) {
-                mesh.rotation.y = -Math.PI / 2; mesh.position.x -= 0.02;
+            if (wb.x === 0 || wb.x === -20.4) {
+                mesh.rotation.y = 0; mesh.position.z += 0.05;
+            } else if (Math.abs(wb.x - 46.4) < 1 || Math.abs(wb.x - 28) < 1) {
+                mesh.rotation.y = -Math.PI / 2; mesh.position.x -= 0.05;
             } else if (wb.x === -2.4) {
-                mesh.rotation.y = Math.PI / 2; mesh.position.x += 0.02;
+                mesh.rotation.y = Math.PI / 2; mesh.position.x += 0.05;
             }
             scene.add(mesh);
         });
 
-        // Lights
         scene.add(new THREE.AmbientLight(0x1a1a1c));
         function addPointLight(color, intensity, dist, x, y, z, shadow) {
             const pl = new THREE.PointLight(color, intensity, dist); pl.position.set(x, y, z);
@@ -484,33 +458,26 @@
         addPointLight(0x5588ff, 1.3, 20, -13, 5, 41, false);
         addPointLight(0xffa555, 1.2, 16, -13, 3, 25, true);
         addPointLight(0xffddaa, 1.5, 28, 28.5, 6, 41, true);
-        addPointLight(0x77aa77, 1.4, 16, -20, 3, 41, true); // Control Room green glow
+        addPointLight(0x77aa77, 1.4, 16, -20, 3, 41, true);
 
-        // VIEWMODELS
         const viewmodel = new THREE.Group();
         const vmHands = new THREE.Group();
         const vmPistol = new THREE.Group();
         const vmShotgun = new THREE.Group();
         const vmAR = new THREE.Group();
 
-        // Hands
-        const hForeL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.5), matSkin); hForeL.position.set(-0.35, -0.28, -0.15); vmHands.add(hForeL);
-        const hLeft = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.11, 0.3), matSkin); hLeft.position.set(-0.35, -0.25, -0.4); vmHands.add(hLeft);
-        const hForeR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.5), matSkin); hForeR.position.set(0.35, -0.28, -0.15); vmHands.add(hForeR);
-        const hRight = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.11, 0.3), matSkin); hRight.position.set(0.35, -0.25, -0.4); vmHands.add(hRight);
+        const hForeR = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 0.52), matSkin); hForeR.position.set(0.32, -0.26, -0.18); vmHands.add(hForeR);
+        const hRight = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.32), matSkin); hRight.position.set(0.32, -0.24, -0.42); vmHands.add(hRight);
 
-        // Pistol (Starting Weapon)
         const pSlide = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.22), matGunMetal); pSlide.position.set(0.22, -0.21, -0.45); vmPistol.add(pSlide);
         const pGrip = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.11, 0.05), matGunMetal); pGrip.position.set(0.22, -0.27, -0.38); pGrip.rotation.x = 0.2; vmPistol.add(pGrip);
 
-        // Shotgun
         const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 1.0), matGunMetal); barrel.position.set(0.25, -0.22, -0.6); vmShotgun.add(barrel);
         const magTube = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.8), matGunMetal); magTube.position.set(0.25, -0.26, -0.5); vmShotgun.add(magTube);
         const pump = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.35), matGunWood); pump.position.set(0.25, -0.26, -0.5); vmShotgun.add(pump);
         const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.1, 0.25), matGunMetal); receiver.position.set(0.25, -0.24, -0.1); vmShotgun.add(receiver);
         const stock = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.14, 0.35), matGunWood); stock.position.set(0.25, -0.28, 0.15); stock.rotation.x = -0.15; vmShotgun.add(stock);
 
-        // Assault Rifle
         const arBody = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.6), matGunMetal); arBody.position.set(0.25, -0.25, -0.3); vmAR.add(arBody);
         const arMag = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.19, 0.1), matGunMetal); arMag.position.set(0.25, -0.38, -0.2); arMag.rotation.x = -0.15; vmAR.add(arMag);
         const arBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.5), matGunMetal); arBarrel.position.set(0.25, -0.22, -0.8); vmAR.add(arBarrel);
@@ -523,16 +490,13 @@
         viewmodel.add(vmHands); viewmodel.add(vmPistol); viewmodel.add(vmShotgun); viewmodel.add(vmAR);
         camera.add(viewmodel); scene.add(camera);
 
-        // Player Body Visualization (If look down)
         const playerBody = new THREE.Group(); scene.add(playerBody);
         function bodyPart(w, h, d, mat) {
             const geo = new THREE.BoxGeometry(w, h, d, 2, 2, 2); mangleGeometry(geo, 0.015);
             const m = new THREE.Mesh(geo, mat); return m;
         }
         const pTorso = bodyPart(0.46, 0.62, 0.28, matPlayerCloth); pTorso.position.set(0, 1.1, -0.1); playerBody.add(pTorso);
-        const pShoulderL = bodyPart(0.16, 0.16, 0.16, matPlayerCloth); pShoulderL.position.set(-0.28, 1.3, -0.1); playerBody.add(pShoulderL);
         const pShoulderR = bodyPart(0.16, 0.16, 0.16, matPlayerCloth); pShoulderR.position.set(0.28, 1.3, -0.1); playerBody.add(pShoulderR);
-        const pArmL = bodyPart(0.13, 0.5, 0.15, matSkin); pArmL.position.set(-0.3, 0.9, -0.1); pArmL.rotation.x = 0.35; playerBody.add(pArmL);
         const pArmR = bodyPart(0.13, 0.5, 0.15, matSkin); pArmR.position.set(0.3, 0.9, -0.1); pArmR.rotation.x = 0.35; playerBody.add(pArmR);
         const pLegL = bodyPart(0.19, 0.92, 0.22, matPlayerCloth); pLegL.position.set(-0.13, 0.48, -0.1); playerBody.add(pLegL);
         const pLegR = bodyPart(0.19, 0.92, 0.22, matPlayerCloth); pLegR.position.set(0.13, 0.48, -0.1); playerBody.add(pLegR);
@@ -576,8 +540,8 @@
             const zGroup = new THREE.Group(); zGroup.position.set(x, 0, z);
             const variant = Math.random();
             let scale = 1.0, varSpd = 1.0, varHp = 1.0, isHeavy = false;
-            if (variant < 0.20) { scale = 0.85; varSpd = 1.5; varHp = 0.65; } // Runner
-            else if (variant > 0.85) { scale = 1.3; varSpd = 0.6; varHp = 2.4; isHeavy = true; } // Heavy / Tank
+            if (variant < 0.20) { scale = 0.85; varSpd = 1.5; varHp = 0.65; }
+            else if (variant > 0.85) { scale = 1.3; varSpd = 0.6; varHp = 2.4; isHeavy = true; }
 
             zGroup.scale.set(scale, scale, scale);
             const uniformColors = ['#2b302d', '#282b28', '#382f2f', '#1d211d'];
@@ -596,18 +560,13 @@
             zGroup.add(torso); scene.add(zGroup);
 
             const parts = [torso, head, aL, aR, lL, lR];
-            // BALANCED STATS: Reduced scaling for fairness across rounds
-            const baseHp = 80 + (currentRound * 18); // Slower HP ramp
-            const baseSpeed = 2.0; 
+            const baseHp = 80 + (currentRound * 18);
+            const baseSpeed = 2.0;
             const data = { 
-                mesh: zGroup, 
-                parts: parts, 
-                hp: baseHp * hpMult * varHp, 
-                isDead: false, 
-                speed: baseSpeed * spdMult * varSpd, 
-                animTime: Math.random()*10, 
-                attackCd: 0, 
-                dmg: Math.max(8, (9 + Math.random()*4)*scale * (1 + (currentRound-1)*0.08)) // Gentle damage scaling
+                mesh: zGroup, parts: parts, hp: baseHp * hpMult * varHp, 
+                isDead: false, speed: baseSpeed * spdMult * varSpd, 
+                animTime: Math.random()*10, attackCd: 0, 
+                dmg: Math.max(8, (9 + Math.random()*4)*scale * (1 + (currentRound-1)*0.08))
             };
             zombies.push(data);
             parts.forEach(p => { p.userData.zData = data; targets.push(p); });
@@ -619,7 +578,6 @@
             document.getElementById('roundNumber').innerText = currentRound;
             const notice = document.getElementById('waveNotice'); document.getElementById('waveNoticeNum').innerText = currentRound;
             notice.style.opacity = 1; setTimeout(() => notice.style.opacity = 0, 3000);
-            // Balanced spawn count
             zombiesToSpawn = Math.floor(5 + Math.pow(currentRound, 1.15) * 1.8); 
             zombiesAlive = zombiesToSpawn;
         }
@@ -639,32 +597,31 @@
             document.getElementById('hud').style.display = 'none'; document.getElementById('crosshair').style.display = 'none';
             document.getElementById('gameOverStats').innerText = `You made it to round ${currentRound} with ${pts} points`;
             document.getElementById('gameOverMenu').style.display = 'flex';
-            resetGame(); // Clear all progress (round, points, weapons, open doors/barriers) immediately on death
+            resetGame();
         }
 
-        // --- MAP PROGRESS & PLAYSTATE RESET LOGIC ---
         function resetGame() {
             zombies.forEach(z => scene.remove(z.mesh)); zombies.length = 0; targets.length = 0;
             bloodParticles.forEach(p => scene.remove(p.mesh)); bloodParticles.length = 0;
             currentRound = 1; zombiesAlive = 0; zombiesToSpawn = 0; waveSpawnTimer = 0; pts = 500; playerHP = MAX_HP;
             
-            // Reconstruct/lock weapons & set starting Pistol
             guns[1].ammo = guns[1].max; guns[1].res = guns[1].maxRes;
             guns[2].unlocked = false; guns[2].ammo = guns[2].max; guns[2].res = guns[2].maxRes;
             guns[3].unlocked = false; guns[3].ammo = guns[3].max; guns[3].res = guns[3].maxRes;
             
-            // Re-lock Barrier
             if (barrierOpen) {
                 barrierOpen = false; scene.add(barrierMesh); colliders.push(barrierCollider);
             }
             
-            switchWeapon(1); // Equips Pistol
+            switchWeapon(1);
             document.getElementById('points').innerText = pts;
             updateHpBar();
             camera.position.set(0, 1.6, 4); yaw = 0; pitch = 0; camera.rotation.set(0, 0, 0);
+            isAiming = false; camera.fov = 90; camera.updateProjectionMatrix();
         }
 
         let yaw = 0, pitch = 0; const keys = {};
+        let isAiming = false;
         function tryRequestPointerLock() {
             try { const p = document.body.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (err) {}
         }
@@ -689,7 +646,6 @@
             currentGameState = STATES.PLAYING; tryRequestPointerLock();
         }
 
-        // DVD Menu Selectors
         const dvdHand = document.getElementById('dvdHand'); const dvdList = document.getElementById('dvdMenuList');
         function positionHandAt(item) {
             const r = item.getBoundingClientRect(); const lr = dvdList.getBoundingClientRect();
@@ -754,10 +710,10 @@
                 keys[e.code] = true;
                 if (e.code === 'Space' && isGrounded) jump();
                 if (e.code === 'KeyR' && equipped !== 0) initiateReload();
-                if (e.code === 'Digit1') switchWeapon(0); // Hands
-                if (e.code === 'Digit2') switchWeapon(1); // Pistol
-                if (e.code === 'Digit3') switchWeapon(2); // Shotgun
-                if (e.code === 'Digit4') switchWeapon(3); // AR
+                if (e.code === 'Digit1') switchWeapon(0);
+                if (e.code === 'Digit2') switchWeapon(1);
+                if (e.code === 'Digit3') switchWeapon(2);
+                if (e.code === 'Digit4') switchWeapon(3);
                 if (e.code === 'KeyE') tryInteract();
             }
         });
@@ -771,12 +727,28 @@
             if (currentGameState === STATES.PLAYING && document.pointerLockElement !== document.body) tryRequestPointerLock();
         });
 
+        document.addEventListener('mousedown', e => {
+            if (e.button === 2 && currentGameState === STATES.PLAYING && equipped !== 0) {
+                isAiming = true;
+                camera.fov = 55;
+                camera.updateProjectionMatrix();
+            }
+        });
+        document.addEventListener('mouseup', e => {
+            if (e.button === 2 && currentGameState === STATES.PLAYING) {
+                isAiming = false;
+                camera.fov = 90;
+                camera.updateProjectionMatrix();
+            }
+        });
+        document.addEventListener('contextmenu', e => e.preventDefault());
+
         let pts = 500; let isReloading = false; let equipped = 1;
         const guns = {
             0: { id: 0, unlocked: true },
-            1: { id: 1, name: "Pistol", ammo: 8, res: 32, max: 8, maxRes: 96, dmg: 35, pellets: 1, auto: false, reloadTime: 700, unlocked: true },
-            2: { id: 2, name: "Shotgun", ammo: 8, res: 32, max: 8, maxRes: 32, dmg: 26, pellets: 7, auto: false, reloadTime: 1000, unlocked: false },
-            3: { id: 3, name: "AR", ammo: 30, res: 120, max: 30, maxRes: 240, dmg: 40, pellets: 1, auto: true, reloadTime: 1200, unlocked: false }
+            1: { id: 1, name: "Pistol", ammo: 12, res: 60, max: 12, maxRes: 120, dmg: 35, pellets: 1, auto: false, reloadTime: 700, unlocked: true },
+            2: { id: 2, name: "Shotgun", ammo: 8, res: 40, max: 8, maxRes: 40, dmg: 26, pellets: 7, auto: false, reloadTime: 1000, unlocked: false },
+            3: { id: 3, name: "AR", ammo: 35, res: 180, max: 35, maxRes: 300, dmg: 40, pellets: 1, auto: true, reloadTime: 1200, unlocked: false }
         };
 
         const raycaster = new THREE.Raycaster();
@@ -843,9 +815,9 @@
             if (isReloading || guns[equipped].ammo <= 0) { if (guns[equipped].ammo === 0) initiateReload(); return; }
             guns[equipped].ammo--; updateAmmoUI();
             const wName = (equipped === 1) ? 'pistol' : ((equipped === 2) ? 'shotgun' : 'ar');
-            playShot(wName); pitch += (equipped === 3 ? 0.015 : 0.03);
-            viewmodel.position.z += 0.18;
-            setTimeout(() => { viewmodel.position.z -= 0.18; }, 100);
+            playShot(wName); pitch += (equipped === 3 ? 0.015 : (isAiming ? 0.01 : 0.03));
+            viewmodel.position.z += isAiming ? 0.08 : 0.18;
+            setTimeout(() => { viewmodel.position.z -= isAiming ? 0.08 : 0.18; }, 100);
             flash.visible = true; flash.rotation.z = Math.random() * Math.PI;
             setTimeout(() => flash.visible = false, 50); muzzleLight.intensity = 5;
             setTimeout(() => muzzleLight.intensity = 0, 60);
@@ -853,7 +825,7 @@
             const PELLETS = guns[equipped].pellets; const PELLET_DAMAGE = guns[equipped].dmg;
             const hitTotals = new Map();
             for (let i = 0; i < PELLETS; i++) {
-                const spread = (equipped === 1) ? 0.005 : ((equipped === 3) ? 0.008 : 0.024);
+                const spread = isAiming ? 0.002 : ((equipped === 1) ? 0.005 : ((equipped === 3) ? 0.008 : 0.024));
                 raycaster.setFromCamera({ x: (Math.random()-0.5)*spread, y: (Math.random()-0.5)*spread }, camera);
                 const hits = raycaster.intersectObjects(targets);
                 if (hits.length > 0) {
@@ -873,9 +845,14 @@
 
         let velY = 0; const grav = 18; let isGrounded = true;
         function jump() { velY = 7.5; isGrounded = false; }
+
         function checkCol(nx, nz) {
-            for (let c of colliders) if (nx+0.3 > c.minX && nx-0.3 < c.maxX && nz+0.3 > c.minZ && nz-0.3 < c.maxZ) return true; return false;
+            for (let c of colliders) {
+                if (nx + 0.35 > c.minX && nx - 0.35 < c.maxX && nz + 0.35 > c.minZ && nz - 0.35 < c.maxZ) return true;
+            }
+            return false;
         }
+
         function nearBarrier() {
             if (barrierOpen) return false; const dx = camera.position.x - (-11); const dz = camera.position.z - 41;
             return Math.sqrt(dx*dx + dz*dz) < 3;
@@ -883,7 +860,7 @@
         function getNearestWallbuy() {
             for (let w of wallbuys) {
                 const dx = camera.position.x - w.x; const dz = camera.position.z - w.z;
-                if (Math.sqrt(dx*dx + dz*dz) < 2.5) return w;
+                if (Math.sqrt(dx*dx + dz*dz) < 2.8) return w;
             } return null;
         }
         function tryInteract() {
@@ -910,16 +887,25 @@
                 if (keys['KeyW']) { mx+=fwd.x; mz+=fwd.z; } if (keys['KeyS']) { mx-=fwd.x; mz-=fwd.z; }
                 if (keys['KeyD']) { mx+=rgt.x; mz+=rgt.z; } if (keys['KeyA']) { mx-=rgt.x; mz-=rgt.z; }
                 const len = Math.sqrt(mx*mx + mz*mz); if (len > 0) { mx=(mx/len)*speed; mz=(mz/len)*speed; }
-                if (!checkCol(camera.position.x + mx, camera.position.z)) camera.position.x += mx;
-                if (!checkCol(camera.position.x, camera.position.z + mz)) camera.position.z += mz;
+                
+                // Improved collision
+                let newX = camera.position.x + mx;
+                let newZ = camera.position.z + mz;
+                if (!checkCol(newX, camera.position.z)) camera.position.x = newX;
+                if (!checkCol(camera.position.x, newZ)) camera.position.z = newZ;
+
                 if (!isGrounded) {
                     velY -= grav * dt; camera.position.y += velY * dt;
                     if (camera.position.y <= 1.6) { camera.position.y = 1.6; velY = 0; isGrounded = true; }
                 }
 
-                // Match player visible body matrix to view camera
-                playerBody.position.set(camera.position.x, camera.position.y - 1.6, camera.position.z);
-                playerBody.rotation.y = yaw;
+                // Body only visible when looking down
+                const bodyVisible = pitch < -0.6; // Look down threshold
+                playerBody.visible = bodyVisible;
+                if (bodyVisible) {
+                    playerBody.position.set(camera.position.x, camera.position.y - 1.6, camera.position.z);
+                    playerBody.rotation.y = yaw;
+                }
 
                 const prompt = document.getElementById('promptText'); let pText = "";
                 if (nearBarrier() && pts >= BARRIER_COST) pText = "[E] OPEN BARRIER - 750";
@@ -942,16 +928,17 @@
                 sway += dt; const bob = performance.now() * 0.012;
                 const isMoving = len > 0;
                 if (equipped !== 0) {
-                    viewmodel.position.x = THREE.MathUtils.lerp(viewmodel.position.x, 0, 0.1);
-                    viewmodel.position.y = THREE.MathUtils.lerp(viewmodel.position.y, 0, 0.1);
-                    viewmodel.position.z = THREE.MathUtils.lerp(viewmodel.position.z, 0, 0.1);
+                    const aimOffset = isAiming ? -0.12 : 0;
+                    viewmodel.position.x = THREE.MathUtils.lerp(viewmodel.position.x, aimOffset * 0.6, 0.1);
+                    viewmodel.position.y = THREE.MathUtils.lerp(viewmodel.position.y, aimOffset * 0.3, 0.1);
+                    viewmodel.position.z = THREE.MathUtils.lerp(viewmodel.position.z, aimOffset, 0.12);
                     if (isReloading) viewmodel.position.y -= 0.15;
                     viewmodel.position.x += Math.sin(sway*1.5)*0.002;
                     if (isMoving && isGrounded) { viewmodel.position.y += Math.sin(bob*1.5) * 0.015; viewmodel.position.x += Math.cos(bob*0.75) * 0.015; }
                 } else {
                     if (isMoving && isGrounded) {
-                        hLeft.position.y = -0.25 + Math.sin(bob*1.5) * 0.05; hRight.position.y = -0.25 + Math.sin(bob*1.5 + Math.PI) * 0.05;
-                    } else { hLeft.position.y = hRight.position.y = -0.25; }
+                        hRight.position.y = -0.24 + Math.sin(bob*1.5) * 0.05;
+                    } else { hRight.position.y = -0.24; }
                 }
 
                 if (fireCooldown > 0) fireCooldown -= dt;
@@ -970,18 +957,16 @@
 
                 if (performance.now() - lastHitTime > 6000 && playerHP < MAX_HP) { playerHP = Math.min(MAX_HP, playerHP + dt * 4); updateHpBar(); }
 
-                // Wave Spawning Controller
                 if (zombiesToSpawn > 0 && zombies.length < 24) {
                     waveSpawnTimer -= dt;
                     if (waveSpawnTimer <= 0) {
                         const pt = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
                         const ox = (Math.random()-0.5)*2; const oz = (Math.random()-0.5)*2;
-                        spawnZombie(pt.x + ox, pt.z + oz, 1 + (currentRound * 0.04), 1 + (currentRound * 0.09)); // Gentler multipliers
+                        spawnZombie(pt.x + ox, pt.z + oz, 1 + (currentRound * 0.04), 1 + (currentRound * 0.09));
                         zombiesToSpawn--; waveSpawnTimer = 0.5 + Math.random()*1.5;
                     }
                 }
 
-                // Zombie Update Loop
                 const px = camera.position.x; const pz = camera.position.z;
                 for (let i = zombies.length - 1; i >= 0; i--) {
                     const z = zombies[i]; const mesh = z.mesh;
@@ -996,11 +981,10 @@
                     }
                     const dx = px - mesh.position.x; const dz = pz - mesh.position.z; const dist = Math.sqrt(dx*dx + dz*dz);
                     
-                    // TELEPORT TO RANDOM VALID MAP POSITION (no player proximity)
                     if (dist > 28 || !isInsideMapFloor(mesh.position.x, mesh.position.z)) {
                         let respawnSuccess = false;
                         for (let attempt = 0; attempt < 20; attempt++) {
-                            const rx = -25 + Math.random() * 80; // Broad map coverage
+                            const rx = -25 + Math.random() * 80;
                             const rz = 0 + Math.random() * 55;
                             if (!checkCol(rx, rz) && isInsideMapFloor(rx, rz)) {
                                 mesh.position.set(rx, 0, rz);
@@ -1009,7 +993,6 @@
                             }
                         }
                         if (!respawnSuccess) {
-                            // Fallback to spawn point
                             const pt = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
                             mesh.position.copy(pt);
                         }
@@ -1035,7 +1018,6 @@
                     }
                 }
 
-                // Blood physics update
                 for (let i = bloodParticles.length - 1; i >= 0; i--) {
                     const p = bloodParticles[i]; p.life += dt; p.vel.y -= 9.8 * dt; p.mesh.position.addScaledVector(p.vel, dt);
                     p.mesh.material.opacity = Math.max(0, 1 - p.life/p.maxLife);
