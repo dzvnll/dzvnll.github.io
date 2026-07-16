@@ -333,18 +333,14 @@ function makeCylinderBone(rT, rB, h, mat, shiftY) {
 const loader = new THREE.GLTFLoader(); 
 
 function spawnZombie(x, z, spdMult) {
-  // IF YOUR FILE IS IN A FOLDER, CHANGE 'zombie.glb' TO 'models/zombie.glb'
-  loader.load('zombie.glb', (gltf) => {
+  // We use './' to tell the browser "look in the current folder"
+  loader.load('./zombie.glb', (gltf) => {
     const model = gltf.scene;
-    
-    // Position it
     model.position.set(x, 0, z);
     
-    // SCALE: If your zombie is invisible, it might be too small or too big.
-    // Try changing 1 to 5 or 0.1
+    // Scale it (If it's too big/small, change these numbers)
     model.scale.set(1, 1, 1); 
 
-    // Add shadows
     model.traverse((node) => {
       if (node.isMesh) {
         node.castShadow = true;
@@ -357,11 +353,9 @@ function spawnZombie(x, z, spdMult) {
     const data = { mesh: model, hp: 100, isDead: false, speed: 1.8 * spdMult };
     zombies.push(data);
     
-    // This allows your gun to hit the model
     model.traverse(c => { if(c.isMesh) { c.userData.zData = data; targets.push(c); } });
   });
 }
-
 // ------------------------------------------------------------------
 // WAVE SYSTEM
 // ------------------------------------------------------------------
