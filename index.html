@@ -77,9 +77,10 @@
     <div id="hud">
         <div class="hud-text" id="waveNotice">WAVE <span id="waveNoticeNum">1</span></div>
         <div class="hud-text" id="round">ROUND <span id="roundNumber">1</span></div>
-        <div class="hud-text" id="points">500</div>
-        <div class="hud-text" id="ammo"><span id="ammoCurrent">8</span> / <span id="ammoReserve" style="color:#888">32</span></div>
-        <div class="hud-text" id="promptText">[E] 750</div>
+        <div class="hud-text" id="points">250</div>
+        <div class="hud-text" id="ammo"><span id="ammoCurrent">12</span> / <span id="ammoReserve" style="color:#888">40</span></div>
+        <div class="hud-text" id="promptText">[E] - 750</div>
+        <div class="hud-text" id="safeNotice" style="top:30px; left:50%; transform:translateX(-50%); font-size:28px; color:#66ff66; text-align:center; white-space:nowrap; opacity:0; transition:opacity 0.2s;"></div>
         <div id="hpWrap" class="hud-text"><div id="hpFill"></div></div>
     </div>
     <div id="dmgVignette"></div>
@@ -91,7 +92,7 @@
         <div class="dvd-diagonal top"></div><div class="dvd-diagonal bottom"></div>
         <div class="dvd-title-wrap">
             <div class="dvd-title">deadhalls<br><span style="font-size:30px;"></span></div>
-            <div class="dvd-sub"> &nbsp;  &nbsp;  &nbsp;  &nbsp;  &nbsp;  &nbsp; </div>
+            <div class="dvd-sub"> &nbsp;  &nbsp; &nbsp;  &nbsp;  &nbsp;  &nbsp; </div>
         </div>
         <div class="dvd-menu-list" id="dvdMenuList">
             <img id="dvdHand" src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='%23ffcc00' stroke='%23000' stroke-width='2'%3E%3Cpath d='M40 26c0-3-2-5-5-5s-5 2-5 5v2c-1-2-3-3-5-3-2 0-4 2-4 4 0 1 0 2 1 3l10 14c2 3 5 5 9 5h5c5 0 9-4 9-9V26c0-3-2-5-5-5s-5 2-5 5z'/%3E%3C/g%3E%3C/svg%3E" style="top:0px; right:calc(100% + 4px);">
@@ -107,19 +108,19 @@
         <div class="settings-row"><label>Mouse Sensitivity</label><input type="range" id="sensSlider" min="1" max="10" value="4"></div>
         <div class="settings-row"><label>Resolution</label><select id="resSelect"><option value="0.2">Low</option><option value="0.3" selected>Medium</option><option value="0.5">High</option><option value="1">Native</option></select></div>
         <div class="settings-row"><label>Shadows</label><button class="toggle on" id="shadowToggle">ON</button></div>
-        <button class="btn" id="settingsBackBtn" style="margin-top:30px;">BACK</button>
+        <button class="btn" id="settingsBackBtn" style="margin-top:30px;">back</button>
     </div>
     
     <div id="pauseMenu" class="menu-overlay">
-        <h1>PAUSED</h1>
-        <button class="btn" id="resumeBtn">RESUME</button>
-        <button class="btn" id="leaveBtn">LEAVE MAP</button>
+        <h1>pause</h1>
+        <button class="btn" id="resumeBtn">continue</button>
+        <button class="btn" id="leaveBtn">leave</button>
     </div>
     
     <div id="gameOverMenu" class="menu-overlay">
-        <h1>YOU DIED</h1>
+        <h1>you died</h1>
         <p class="sub" id="gameOverStats">You made it to round 1</p>
-        <button class="btn" id="restartBtn">TRY AGAIN</button>
+        <button class="btn" id="restartBtn">retry</button>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -610,6 +611,7 @@
         }
 
         let playerHP = 100; const MAX_HP = 100; let lastHitTime = 0;
+        const ZOMBIE_ATTACK_GRACE_MS = 10000; let zombieAttacksDisabledUntil = 0;
         function updateHpBar() { document.getElementById('hpFill').style.width = Math.max(0, playerHP) + '%'; }
         function damagePlayer(amount) {
             if (currentGameState !== STATES.PLAYING) return;
@@ -623,6 +625,7 @@
             document.getElementById('hud').style.display = 'none'; document.getElementById('crosshair').style.display = 'none';
             document.getElementById('gameOverStats').innerText = `You made it to round ${currentRound} with ${pts} points`;
             document.getElementById('gameOverMenu').style.display = 'flex';
+            resetGame(); // Clear all progress (round, points, weapons, open doors/barriers) immediately on death
         }
 
         // --- MAP PROGRESS & PLAYSTATE RESET LOGIC ---
@@ -657,6 +660,7 @@
             document.getElementById('pauseMenu').style.display = 'none'; document.getElementById('hud').style.display = 'block';
             document.getElementById('crosshair').style.display = equipped !== 0 ? 'block' : 'none';
             currentGameState = STATES.PLAYING;
+            zombieAttacksDisabledUntil = performance.now() + ZOMBIE_ATTACK_GRACE_MS;
             if (zombiesAlive === 0 && currentRound === 1 && zombies.length === 0 && zombiesToSpawn === 0) startWave();
             tryRequestPointerLock();
         }
@@ -912,6 +916,15 @@
                 }
                 prompt.innerText = pText; prompt.style.opacity = pText ? 1 : 0;
 
+                const safeNotice = document.getElementById('safeNotice');
+                const safeMsRemaining = zombieAttacksDisabledUntil - performance.now();
+                if (safeMsRemaining > 0) {
+                    safeNotice.innerText = `ZOMBIES CAN'T ATTACK - ${Math.ceil(safeMsRemaining / 1000)}s`;
+                    safeNotice.style.opacity = 1;
+                } else {
+                    safeNotice.style.opacity = 0;
+                }
+
                 sway += dt; const bob = performance.now() * 0.012;
                 const isMoving = len > 0;
                 if (equipped !== 0) {
@@ -1000,7 +1013,10 @@
                     } else {
                         mesh.lookAt(px, 0, pz); z.animTime += dt * 8;
                         aL.rotation.x = -Math.PI/2 + Math.sin(z.animTime) * 0.6; aR.rotation.x = -Math.PI/2 + Math.sin(z.animTime + Math.PI) * 0.6;
-                        if (z.attackCd <= 0) { z.attackCd = 1.0; damagePlayer(z.dmg); }
+                        if (z.attackCd <= 0) {
+                            z.attackCd = 1.0;
+                            if (performance.now() >= zombieAttacksDisabledUntil) damagePlayer(z.dmg);
+                        }
                     }
                 }
 
