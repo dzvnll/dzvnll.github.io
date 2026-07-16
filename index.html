@@ -7,7 +7,6 @@
   * { margin:0; padding:0; box-sizing:border-box; user-select: none; }
   html, body { width:100%; height:100%; overflow:hidden; background:#000; }
   
-  /* Forces the canvas to upscale with crisp, chunky pixels */
   canvas { 
     display: block; 
     width: 100vw !important; 
@@ -19,11 +18,12 @@
     image-rendering: pixelated;
   }
 
-  /* Retro NZP/Zombies style HUD */
+  /* HUD Styling */
   #hud {
     position: fixed; inset: 0; pointer-events: none; z-index: 10;
     font-family: 'Courier New', Courier, monospace;
     font-weight: bold; text-transform: uppercase;
+    display: none; /* Hidden on main menu */
   }
 
   .hud-text {
@@ -39,61 +39,101 @@
     position:fixed; top:50%; left:50%; width: 4px; height: 4px;
     background: rgba(255,255,255,0.7);
     transform:translate(-50%,-50%); z-index:15; pointer-events:none;
+    display: none;
   }
 
-  #lookTip {
-    position:fixed; top:20px; left:50%; transform:translateX(-50%);
-    color:#fff; font-size:16px; background:rgba(0,0,0,0.8);
-    padding:10px 16px; z-index:15;
+  /* Overlay Menus */
+  .menu-overlay {
+    position: fixed; inset: 0;
+    background: rgba(10, 10, 12, 0.85);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 20;
     font-family: 'Courier New', Courier, monospace;
-    border: 2px solid #444; text-align: center;
+    color: #fff;
+    border: 4px double #444;
   }
-  #lookTip.hide { display: none; }
+
+  h1 {
+    font-size: 56px; color: #d00; margin-bottom: 40px;
+    text-shadow: 3px 3px 0 #000; text-align: center;
+    letter-spacing: 4px;
+  }
+
+  .btn {
+    background: #222; color: #fff;
+    border: 2px solid #555;
+    padding: 12px 28px; font-size: 18px; font-weight: bold;
+    cursor: pointer; font-family: inherit;
+    margin: 10px; width: 220px; text-align: center;
+    transition: all 0.2s;
+    text-shadow: 1px 1px 0 #000;
+  }
+  .btn:hover {
+    background: #d00; border-color: #fff;
+    transform: scale(1.05);
+  }
+
+  #pauseMenu { display: none; }
+  #mainMenu { display: flex; }
 </style>
 </head>
 <body>
 
+<!-- HUD -->
 <div id="hud">
   <div class="hud-text" id="round">|||</div>
   <div class="hud-text" id="points">500</div>
-  <div class="hud-text" id="ammo"><span id="ammoCurrent">8</span> / <span style="color:#aaa">32</span></div>
+  <div class="hud-text" id="ammo"><span id="ammoCurrent">8</span> / <span id="ammoReserve" style="color:#aaa">32</span></div>
+</div>
+<div id="crosshair"></div>
+
+<!-- Main Menu -->
+<div id="mainMenu" class="menu-overlay">
+  <h1>DEAD HALLS:<br>PORTABLE</h1>
+  <button class="btn" onclick="startGame()">START GAME</button>
 </div>
 
-<div id="lookTip">CLICK TO LOCK MOUSE<br><br>WASD to Move &nbsp;&middot;&nbsp; Click to Shoot</div>
-<div id="crosshair"></div>
+<!-- Pause Menu -->
+<div id="pauseMenu" class="menu-overlay">
+  <h1>GAME PAUSED</h1>
+  <button class="btn" onclick="resumeGame()">RESUME</button>
+  <button class="btn" onclick="leaveGame()">LEAVE MAP</button>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // ------------------------------------------------------------------
-// CORE ENGINE SETUP
+// GAME STATE MANAGEMENT
 // ------------------------------------------------------------------
+const STATES = { MENU: 'menu', PLAYING: 'playing', PAUSED: 'paused' };
+let currentGameState = STATES.MENU;
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0a0c);
-scene.fog = new THREE.Fog(0x0a0a0c, 3, 30); // Gives that classic PS1/N64 draw distance fade
+scene.fog = new THREE.Fog(0x0a0a0c, 3, 25);
 
 const camera = new THREE.PerspectiveCamera(85, window.innerWidth/window.innerHeight, 0.1, 100);
 camera.rotation.order = 'YXZ';
-camera.position.set(0, 1.6, 2);
 
-// Render at 50% resolution, then let CSS scale it up (pixelated)
 const RES_SCALE = 0.5; 
 const renderer = new THREE.WebGLRenderer({ antialias: false });
 renderer.setPixelRatio(1);
-// Basic linear encoding, no tone mapping, for raw retro colors
 renderer.outputEncoding = THREE.LinearEncoding; 
-
 document.body.appendChild(renderer.domElement);
 
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  // Set internal canvas size lower, CSS stretches it to 100vw/100vh
   renderer.setSize(w * RES_SCALE, h * RES_SCALE, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
 resize();
+
+// Disable standard right-click context menu so we can use it for aiming
+document.addEventListener('contextmenu', e => e.preventDefault());
 
 // ------------------------------------------------------------------
 // RETRO TEXTURE GENERATOR
@@ -105,37 +145,34 @@ function createRetroTexture(type) {
   const ctx = canvas.getContext('2d');
 
   if (type === 'brick') {
-    ctx.fillStyle = '#4a4036'; ctx.fillRect(0,0,size,size);
-    ctx.fillStyle = '#302820'; // Mortar
+    ctx.fillStyle = '#3a342e'; ctx.fillRect(0,0,size,size);
+    ctx.fillStyle = '#201a14';
     ctx.fillRect(0, 30, size, 4);
     ctx.fillRect(30, 0, 4, 30);
     ctx.fillRect(60, 34, 4, 30);
   } else if (type === 'tile') {
-    ctx.fillStyle = '#222'; ctx.fillRect(0,0,size,size);
-    ctx.fillStyle = '#111'; // Grout
+    ctx.fillStyle = '#1c1c1c'; ctx.fillRect(0,0,size,size);
+    ctx.fillStyle = '#0d0d0d';
     ctx.fillRect(0, 0, size, 2);
     ctx.fillRect(0, 0, 2, size);
-    ctx.fillStyle = '#333'; // Highlight
-    ctx.fillRect(2, 2, size-4, 2);
   } else if (type === 'dirt') {
-    ctx.fillStyle = '#1a2215'; ctx.fillRect(0,0,size,size);
+    ctx.fillStyle = '#1e1c14'; ctx.fillRect(0,0,size,size);
   } else if (type === 'wood') {
-    ctx.fillStyle = '#3d2616'; ctx.fillRect(0,0,size,size);
-    ctx.fillStyle = '#26160b';
+    ctx.fillStyle = '#3a2214'; ctx.fillRect(0,0,size,size);
+    ctx.fillStyle = '#1d1007';
     ctx.fillRect(0, 15, size, 2);
     ctx.fillRect(0, 40, size, 3);
   }
 
-  // Add chunky noise to all textures
-  for (let i = 0; i < 300; i++) {
-    ctx.fillStyle = Math.random() > 0.5 ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.1)';
+  for (let i = 0; i < 200; i++) {
+    ctx.fillStyle = Math.random() > 0.5 ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.08)';
     const px = Math.floor(Math.random() * (size/2)) * 2;
     const py = Math.floor(Math.random() * (size/2)) * 2;
     ctx.fillRect(px, py, 2, 2);
   }
 
   const tex = new THREE.CanvasTexture(canvas);
-  tex.magFilter = THREE.NearestFilter; // The most important line for retro graphics
+  tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
   tex.generateMipmaps = false;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -148,26 +185,21 @@ const matDirt  = new THREE.MeshLambertMaterial({ map: createRetroTexture('dirt')
 const matWood  = new THREE.MeshLambertMaterial({ map: createRetroTexture('wood') });
 
 // ------------------------------------------------------------------
-// MAP BUILDER & COLLISION SYSTEM
+// MAP ARCHITECTURE & COLLISION
 // ------------------------------------------------------------------
 const colliders = [];
 
 function addWall(x, z, w, d, mat) {
   const h = 4;
   const geo = new THREE.BoxGeometry(w, h, d);
-  
-  // Adjust UVs so textures don't stretch horribly on long walls
   const uvs = geo.attributes.uv;
   for (let i = 0; i < uvs.count; i++) {
     uvs.setX(i, uvs.getX(i) * (w > d ? w/4 : d/4));
     uvs.setY(i, uvs.getY(i) * (h/4));
   }
-
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(x, h/2, z);
   scene.add(mesh);
-
-  // Add to physics colliders
   colliders.push({ minX: x - w/2, maxX: x + w/2, minZ: z - d/2, maxZ: z + d/2 });
 }
 
@@ -187,14 +219,13 @@ function addFloor(x, z, w, d, mat, hasCeiling = true) {
   }
 }
 
-// === LAYOUT ===
 // Room 1 (Spawn)
 addFloor(0, 4, 10, 10, matTile);
-addWall(0, -1, 10, 2, matBrick);   // Back
-addWall(-6, 4, 2, 12, matBrick);   // Left
-addWall(6, 4, 2, 12, matBrick);    // Right
-addWall(-3.5, 10, 5, 2, matBrick); // Front Left
-addWall(3.5, 10, 5, 2, matBrick);  // Front Right
+addWall(0, -1, 10, 2, matBrick);
+addWall(-6, 4, 2, 12, matBrick);
+addWall(6, 4, 2, 12, matBrick);
+addWall(-3.5, 10, 5, 2, matBrick);
+addWall(3.5, 10, 5, 2, matBrick);
 
 // Hallway
 addFloor(0, 15, 4, 10, matTile);
@@ -203,77 +234,145 @@ addWall(2.5, 15, 1, 10, matBrick);
 
 // Room 2
 addFloor(0, 25, 12, 10, matTile);
-addWall(-4.5, 19.5, 5, 1, matBrick); // Back left connect
-addWall(4.5, 19.5, 5, 1, matBrick);  // Back right connect
-addWall(-6.5, 25, 1, 12, matBrick);  // Left
-addWall(6.5, 25, 1, 12, matBrick);   // Right
-addWall(-4, 30.5, 6, 1, matBrick);   // Front Left
-addWall(4, 30.5, 6, 1, matBrick);    // Front Right
+addWall(-4.5, 19.5, 5, 1, matBrick);
+addWall(4.5, 19.5, 5, 1, matBrick);
+addWall(-6.5, 25, 1, 12, matBrick);
+addWall(6.5, 25, 1, 12, matBrick);
+addWall(-4, 30.5, 6, 1, matBrick);
+addWall(4, 30.5, 6, 1, matBrick);
 
 // Courtyard (Outside)
 addFloor(0, 41, 20, 20, matDirt, false);
 addWall(-10.5, 41, 1, 22, matBrick);
 addWall(10.5, 41, 1, 22, matBrick);
 addWall(0, 51.5, 22, 1, matBrick);
-addWall(-7.5, 30.5, 5, 1, matBrick); // Connect left
-addWall(7.5, 30.5, 5, 1, matBrick);  // Connect right
+addWall(-7.5, 30.5, 5, 1, matBrick);
+addWall(7.5, 30.5, 5, 1, matBrick);
 
-// The Door (Kicked open)
+// The Door
 const door = new THREE.Mesh(new THREE.BoxGeometry(2.8, 3.8, 0.2), matWood);
 door.position.set(-1.2, 1.9, 31.2);
 door.rotation.y = Math.PI * 0.3;
 scene.add(door);
-colliders.push({ minX: -2.6, maxX: -1.0, minZ: 30.8, maxZ: 32.5 }); // rough door collision
+colliders.push({ minX: -2.6, maxX: -1.0, minZ: 30.8, maxZ: 32.5 });
 
 // ------------------------------------------------------------------
-// ZOMBIES (Simple AI)
+// DETAILED RETRO ZOMBIES
 // ------------------------------------------------------------------
 const zombies = [];
-const matZSkin = new THREE.MeshLambertMaterial({ color: 0x6e705b });
-const matZClothes = new THREE.MeshLambertMaterial({ color: 0x3d3532 });
+const shootableTargets = []; // Array for Raycaster target evaluation
+
+const zombieSkin = new THREE.MeshLambertMaterial({ color: 0x4a5f35 }); // Rotten olive green
+const zombieClothes = new THREE.MeshLambertMaterial({ color: 0x3d414a }); // Tattered slate blue
+const zombieBlood = new THREE.MeshBasicMaterial({ color: 0x800000 }); // Blood splatter
+const zombieEyes = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Glowing red eyes
 
 function spawnZombie(x, z) {
   const zGrp = new THREE.Group();
   
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.5), matZClothes);
-  body.position.y = 0.6; zGrp.add(body);
+  // Ragged Torso
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.1, 0.4), zombieClothes);
+  body.position.y = 0.55;
+  zGrp.add(body);
   
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), matZSkin);
-  head.position.y = 1.4; zGrp.add(head);
+  // Bloodied chest patch
+  const bloodPatch = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.02), zombieBlood);
+  bloodPatch.position.set(0, 0.65, 0.21);
+  zGrp.add(bloodPatch);
   
-  const arms = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.25, 0.25), matZClothes);
-  arms.position.set(0, 1.0, 0.3); zGrp.add(arms);
+  // Rotten Head
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), zombieSkin);
+  head.position.y = 1.3;
+  zGrp.add(head);
 
-  zGrp.position.set(x, 0, z);
+  // Glowing Red Eyes
+  const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.06), zombieEyes);
+  eyeL.position.set(-0.1, 1.35, 0.19);
+  const eyeR = eyeL.clone();
+  eyeR.position.x = 0.1;
+  zGrp.add(eyeL);
+  zGrp.add(eyeR);
+
+  // Classic outstretched zombie arms
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.7), zombieSkin);
+  armL.position.set(-0.4, 0.9, 0.3);
+  armL.rotation.x = -0.1; // Slightly angled forward
+  
+  const armR = armL.clone();
+  armR.position.x = 0.4;
+  zGrp.add(armL);
+  zGrp.add(armR);
+
+  // Low-poly trousers
+  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.6, 0.25), zombieClothes);
+  legL.position.set(-0.18, -0.2, 0);
+  const legR = legL.clone();
+  legR.position.x = 0.18;
+  zGrp.add(legL);
+  zGrp.add(legR);
+
+  zGrp.position.set(x, 0.6, z); // Offsetting half-height off the ground
   scene.add(zGrp);
-  zombies.push(zGrp);
+
+  // Store data attributes on the group object
+  const zData = {
+    mesh: zGrp,
+    hp: 100,
+    isDead: false,
+    flinchTimer: 0,
+    animTime: Math.random() * 10
+  };
+
+  zombies.push(zData);
+  
+  // Tag all children meshes inside the group with a reference back to the parent data
+  zGrp.traverse(child => {
+    if (child.isMesh) {
+      child.userData.parentZombie = zData;
+      shootableTargets.push(child);
+    }
+  });
 }
 
-spawnZombie(0, 16);    // Hallway
-spawnZombie(-3, 26);   // Room 2
-spawnZombie(4, 27);    // Room 2
-spawnZombie(0, 38);    // Courtyard
-spawnZombie(-6, 42);   // Courtyard
+// Populate Level
+function populateZombies() {
+  // Clear existing
+  zombies.forEach(z => scene.remove(z.mesh));
+  zombies.length = 0;
+  shootableTargets.length = 0;
+
+  spawnZombie(0, 16);    // Hallway
+  spawnZombie(-3, 25);   // Room 2
+  spawnZombie(3, 27);    // Room 2
+  spawnZombie(0, 37);    // Courtyard entry
+  spawnZombie(-5, 42);   // Courtyard back-left
+  spawnZombie(5, 44);    // Courtyard back-right
+}
 
 // ------------------------------------------------------------------
-// VIEWMODEL (Low-Poly Shotgun & Recoil)
+// WEAPON VIEWMODEL, RECOIL & ADS
 // ------------------------------------------------------------------
 const viewmodel = new THREE.Group();
-const matGunMetal = new THREE.MeshLambertMaterial({ color: 0x222222 });
+const matGunMetal = new THREE.MeshLambertMaterial({ color: 0x1d1d1f, flatShading:true });
 
-const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.8), matGunMetal);
+const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.9), matGunMetal);
 barrel.position.set(0.15, -0.2, -0.6);
 viewmodel.add(barrel);
 
-const pump = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.3), matWood);
+const pump = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.35), matWood);
 pump.position.set(0.15, -0.22, -0.5);
 viewmodel.add(pump);
 
+const stock = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.15, 0.4), matWood);
+stock.position.set(0.15, -0.28, -0.15);
+stock.rotation.x = -0.15;
+viewmodel.add(stock);
+
 // Muzzle Flash
-const flashGeo = new THREE.PlaneGeometry(0.3, 0.3);
-const flashMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.8 });
+const flashGeo = new THREE.PlaneGeometry(0.25, 0.25);
+const flashMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9 });
 const flash = new THREE.Mesh(flashGeo, flashMat);
-flash.position.set(0.15, -0.2, -1.05);
+flash.position.set(0.15, -0.2, -1.1);
 flash.visible = false;
 viewmodel.add(flash);
 
@@ -283,143 +382,359 @@ scene.add(camera);
 // ------------------------------------------------------------------
 // LIGHTING
 // ------------------------------------------------------------------
-scene.add(new THREE.AmbientLight(0x111111)); 
-scene.add(new THREE.PointLight(0xffddaa, 0.8, 15)).position.set(0, 3, 5);   // R1
-scene.add(new THREE.PointLight(0xff5555, 0.7, 12)).position.set(0, 3, 15);  // Hall
-scene.add(new THREE.PointLight(0xffddaa, 0.8, 15)).position.set(0, 3, 25);  // R2
-scene.add(new THREE.PointLight(0x4466aa, 1.0, 30)).position.set(0, 6, 40);  // Moon
+scene.add(new THREE.AmbientLight(0x0a0a10)); 
+scene.add(new THREE.PointLight(0xffb766, 0.9, 14)).position.set(0, 3, 5);   // R1
+scene.add(new THREE.PointLight(0xff3322, 0.8, 10)).position.set(0, 3, 15);  // Hallway
+scene.add(new THREE.PointLight(0xffb766, 0.9, 14)).position.set(0, 3, 25);  // R2
+scene.add(new THREE.PointLight(0x3366cc, 1.2, 25)).position.set(0, 7, 40);  // Outside courtyard
 
 // ------------------------------------------------------------------
-// INPUT & MOVEMENT LOGIC
+// INPUTS & FIRING PHYSICS
 // ------------------------------------------------------------------
 let yaw = 0, pitch = 0, locked = false;
 const keys = {};
 
-document.body.addEventListener('click', () => {
-  if (!locked) {
-    document.body.requestPointerLock();
-  } else {
-    fireWeapon();
+let ammoCurrent = 8;
+let ammoReserve = 32;
+let points = 500;
+
+let isAiming = false;
+let isReloading = false;
+
+let recoilOffset = 0;
+let reloadTimer = 0;
+
+const raycaster = new THREE.Raycaster();
+
+// Handle inputs
+document.addEventListener('keydown', e => {
+  if (currentGameState !== STATES.PLAYING) return;
+  keys[e.code] = true;
+
+  if (e.code === 'KeyR') {
+    initiateReload();
+  }
+});
+document.addEventListener('keyup', e => keys[e.code] = false);
+
+// Capture pointer actions
+document.body.addEventListener('mousedown', (e) => {
+  if (currentGameState !== STATES.PLAYING) return;
+
+  if (e.button === 0) { // Left Click
+    fireShotgun();
+  } else if (e.button === 2) { // Right Click
+    isAiming = true;
   }
 });
 
-document.addEventListener('pointerlockchange', () => {
-  locked = document.pointerLockElement === document.body;
-  document.getElementById('lookTip').className = locked ? 'hide' : '';
+document.body.addEventListener('mouseup', (e) => {
+  if (e.button === 2) { // Let go of Right Click
+    isAiming = false;
+  }
 });
 
 document.addEventListener('mousemove', (e) => {
-  if (!locked) return;
-  yaw -= e.movementX * 0.002;
-  pitch -= e.movementY * 0.002;
+  if (!locked || currentGameState !== STATES.PLAYING) return;
+  
+  // Rotate slower while aiming
+  const aimMultiplier = isAiming ? 0.4 : 1.0;
+  yaw -= e.movementX * 0.002 * aimMultiplier;
+  pitch -= e.movementY * 0.002 * aimMultiplier;
   pitch = Math.max(-Math.PI/2.1, Math.min(Math.PI/2.1, pitch));
 });
 
-document.addEventListener('keydown', e => keys[e.code] = true);
-document.addEventListener('keyup', e => keys[e.code] = false);
+// Pointerlock state change forces pauses
+document.addEventListener('pointerlockchange', () => {
+  const isNowLocked = document.pointerLockElement === document.body;
+  locked = isNowLocked;
 
-// Physics Helper
+  if (!isNowLocked && currentGameState === STATES.PLAYING) {
+    pauseGame();
+  }
+});
+
+// ------------------------------------------------------------------
+// SYSTEM WORKFLOWS
+// ------------------------------------------------------------------
+function startGame() {
+  document.getElementById('mainMenu').style.display = 'none';
+  document.getElementById('pauseMenu').style.display = 'none';
+  document.getElementById('hud').style.display = 'block';
+  document.getElementById('crosshair').style.display = 'block';
+
+  currentGameState = STATES.PLAYING;
+  
+  // Reset values
+  ammoCurrent = 8;
+  ammoReserve = 32;
+  points = 500;
+  updateUI();
+  
+  camera.position.set(0, 1.6, 2);
+  yaw = 0; pitch = 0;
+  isAiming = false;
+  isReloading = false;
+
+  populateZombies();
+
+  document.body.requestPointerLock();
+}
+
+function pauseGame() {
+  currentGameState = STATES.PAUSED;
+  document.getElementById('pauseMenu').style.display = 'flex';
+  document.getElementById('crosshair').style.display = 'none';
+}
+
+function resumeGame() {
+  document.getElementById('pauseMenu').style.display = 'none';
+  document.getElementById('crosshair').style.display = 'block';
+  currentGameState = STATES.PLAYING;
+  document.body.requestPointerLock();
+}
+
+function leaveGame() {
+  document.getElementById('pauseMenu').style.display = 'none';
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('crosshair').style.display = 'none';
+  document.getElementById('mainMenu').style.display = 'flex';
+  
+  currentGameState = STATES.MENU;
+  document.exitPointerLock();
+}
+
+// ------------------------------------------------------------------
+// COMBAT MECHANICS
+// ------------------------------------------------------------------
+function updateUI() {
+  document.getElementById('ammoCurrent').innerText = ammoCurrent;
+  document.getElementById('ammoReserve').innerText = ammoReserve;
+  document.getElementById('points').innerText = points;
+}
+
+function initiateReload() {
+  if (isReloading || ammoCurrent === 8 || ammoReserve === 0) return;
+  isReloading = true;
+  isAiming = false;
+  reloadTimer = 1.2; // 1.2 seconds reload time
+}
+
+function fireShotgun() {
+  if (isReloading || ammoCurrent <= 0) {
+    if (ammoCurrent === 0) initiateReload();
+    return;
+  }
+
+  ammoCurrent--;
+  updateUI();
+
+  // Visual Recoil
+  recoilOffset = 0.15;
+  pitch += isAiming ? 0.02 : 0.05;
+
+  // Flash muzzle
+  flash.visible = true;
+  flash.rotation.z = Math.random() * Math.PI;
+  setTimeout(() => flash.visible = false, 60);
+
+  // Raycast Hit Scan
+  raycaster.setFromCamera({ x: 0, y: 0 }, camera);
+  const intersects = raycaster.intersectObjects(shootableTargets);
+
+  if (intersects.length > 0) {
+    const hitObj = intersects[0].object;
+    const zombieData = hitObj.userData.parentZombie;
+    
+    if (zombieData && !zombieData.isDead) {
+      // Create a temporary bloody spark at intersection
+      spawnHitSpark(intersects[0].point);
+
+      // Inflict Damage
+      zombieData.hp -= 40; // 3 shots to kill
+      zombieData.flinchTimer = 0.15; // Makes them jerk back briefly
+      points += 10;
+      updateUI();
+
+      if (zombieData.hp <= 0) {
+        killZombie(zombieData);
+      }
+    }
+  }
+}
+
+function killZombie(zData) {
+  zData.isDead = true;
+  points += 60; // bonus points for kill
+  updateUI();
+
+  // Ragdoll/Fall Animation Target: Tip over backwards
+  const mesh = zData.mesh;
+  const fallDuration = 0.4;
+  let t = 0;
+  
+  function fallOver() {
+    if (t >= 1) return;
+    t += 0.08;
+    mesh.rotation.x = -Math.PI / 2 * t;
+    mesh.position.y = 0.6 - (0.5 * t); // drop flat to the ground floor
+    setTimeout(fallOver, 16);
+  }
+  fallOver();
+}
+
+// Little red geometric block splatters as retro hit feedback
+function spawnHitSpark(position) {
+  const pGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+  const pMat = new THREE.MeshBasicMaterial({ color: 0xaa0000 });
+  const spark = new THREE.Mesh(pGeo, pMat);
+  spark.position.copy(position);
+  scene.add(spark);
+  setTimeout(() => scene.remove(spark), 200);
+}
+
+// Collisions with walls AABB
 function checkCollision(nx, nz) {
-  const r = 0.3; // player radius
+  const r = 0.32; // player collider radius
   for (let c of colliders) {
     if (nx + r > c.minX && nx - r < c.maxX && nz + r > c.minZ && nz - r < c.maxZ) {
-      return true; // Hit a wall
+      return true;
     }
   }
   return false;
 }
 
-// Shooting Mechanics
-let ammo = 8;
-let recoilOffset = 0;
-
-function fireWeapon() {
-  if (ammo <= 0 || recoilOffset > 0.05) return;
-  ammo--;
-  document.getElementById('ammoCurrent').innerText = ammo;
-  
-  // Recoil effect
-  recoilOffset = 0.15;
-  pitch += 0.05; // Kick camera up slightly
-  
-  flash.visible = true;
-  flash.rotation.z = Math.random() * Math.PI;
-  setTimeout(() => flash.visible = false, 50);
-}
-
 // ------------------------------------------------------------------
-// MAIN LOOP
+// GAME ENGINE TICK LOOP
 // ------------------------------------------------------------------
 const clock = new THREE.Clock();
 let sway = 0;
+
+// Aim Down Sights Config
+const adsTargetPos = new THREE.Vector3(0.0, -0.15, -0.5);
+const normalPos = new THREE.Vector3(0.15, -0.22, -0.6);
+let currentModelPos = normalPos.clone();
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.1);
 
-  camera.rotation.set(pitch, yaw, 0, 'YXZ');
+  if (currentGameState === STATES.PLAYING) {
+    camera.rotation.set(pitch, yaw, 0, 'YXZ');
 
-  // Player Movement
-  const speed = 4.5 * dt;
-  const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-  const right = new THREE.Vector3(-forward.z, 0, forward.x);
-  
-  let mx = 0, mz = 0;
-  if (keys['KeyW']) { mx += forward.x; mz += forward.z; }
-  if (keys['KeyS']) { mx -= forward.x; mz -= forward.z; }
-  if (keys['KeyD']) { mx += right.x; mz += right.z; }
-  if (keys['KeyA']) { mx -= right.x; mz -= right.z; }
-
-  // Normalize diagonal speed
-  const len = Math.sqrt(mx*mx + mz*mz);
-  if (len > 0) {
-    mx = (mx / len) * speed;
-    mz = (mz / len) * speed;
-  }
-
-  // Slide against walls (evaluate X and Z separately)
-  if (!checkCollision(camera.position.x + mx, camera.position.z)) {
-    camera.position.x += mx;
-  }
-  if (!checkCollision(camera.position.x, camera.position.z + mz)) {
-    camera.position.z += mz;
-  }
-
-  // View bobbing and gun sway
-  const isMoving = len > 0;
-  const bob = performance.now() * 0.006;
-  camera.position.y = 1.6 + (isMoving ? Math.sin(bob) * 0.04 : 0);
-  
-  sway += dt;
-  
-  // Gun recoil recovery
-  if (recoilOffset > 0) recoilOffset -= dt * 0.5;
-  if (recoilOffset < 0) recoilOffset = 0;
-
-  viewmodel.position.x = Math.sin(sway * 1.2) * 0.005;
-  viewmodel.position.y = (isMoving ? Math.abs(Math.sin(bob)) * 0.01 : 0);
-  viewmodel.position.z = recoilOffset; // Gun kicks backwards
-
-  // Zombie AI logic
-  zombies.forEach(z => {
-    const dx = camera.position.x - z.position.x;
-    const dz = camera.position.z - z.position.z;
-    const dist = Math.sqrt(dx*dx + dz*dz);
+    // Player controls
+    const speed = (keys['ShiftLeft'] ? 6.0 : 3.8) * dt;
+    const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const right = new THREE.Vector3(-forward.z, 0, forward.x);
     
-    // If player is close, turn and walk towards them
-    if (dist < 18 && dist > 1.2) {
-      z.lookAt(camera.position.x, 0, camera.position.z);
-      
-      // Simple collision for zombies too (don't walk through walls)
-      const zx = z.position.x + (dx/dist) * 0.8 * dt;
-      const zz = z.position.z + (dz/dist) * 0.8 * dt;
-      if (!checkCollision(zx, z.position.z)) z.position.x = zx;
-      if (!checkCollision(z.position.x, zz)) z.position.z = zz;
-      
-      // Zombie wobble walk
-      z.position.y = Math.abs(Math.sin(sway * 4)) * 0.05;
+    let mx = 0, mz = 0;
+    if (keys['KeyW']) { mx += forward.x; mz += forward.z; }
+    if (keys['KeyS']) { mx -= forward.x; mz -= forward.z; }
+    if (keys['KeyD']) { mx += right.x; mz += right.z; }
+    if (keys['KeyA']) { mx -= right.x; mz -= right.z; }
+
+    const len = Math.sqrt(mx*mx + mz*mz);
+    if (len > 0) {
+      mx = (mx / len) * speed;
+      mz = (mz / len) * speed;
     }
-  });
+
+    // Wall slide movement
+    if (!checkCollision(camera.position.x + mx, camera.position.z)) {
+      camera.position.x += mx;
+    }
+    if (!checkCollision(camera.position.x, camera.position.z + mz)) {
+      camera.position.z += mz;
+    }
+
+    // ADS Zoom transition
+    const targetFOV = isAiming ? 50 : 85;
+    if (Math.abs(camera.fov - targetFOV) > 0.1) {
+      camera.fov += (targetFOV - camera.fov) * 0.15;
+      camera.updateProjectionMatrix();
+    }
+
+    // ADS Viewmodel position transition
+    const targetModelPos = isAiming ? adsTargetPos : normalPos;
+    currentModelPos.lerp(targetModelPos, 0.2);
+
+    // View bobbing and gun sway
+    const isMoving = len > 0;
+    const bob = performance.now() * 0.007;
+    camera.position.y = 1.6 + (isMoving ? Math.sin(bob) * 0.035 : 0);
+    
+    sway += dt;
+
+    // Firing Recoil Decay
+    if (recoilOffset > 0) recoilOffset -= dt * 0.8;
+    if (recoilOffset < 0) recoilOffset = 0;
+
+    // Viewmodel position mapping
+    viewmodel.position.copy(currentModelPos);
+    viewmodel.position.x += Math.sin(sway * 1.2) * 0.004;
+    viewmodel.position.y += (isMoving ? Math.abs(Math.sin(bob)) * 0.008 : 0);
+    viewmodel.position.z += recoilOffset; // Kick-back on firing
+
+    // Reload Anim sequence
+    if (isReloading) {
+      reloadTimer -= dt;
+      // Dip gun down and rise back up
+      if (reloadTimer > 0.6) {
+        viewmodel.position.y -= 0.15 * ((1.2 - reloadTimer) / 0.6);
+      } else {
+        viewmodel.position.y -= 0.15 * (reloadTimer / 0.6);
+      }
+
+      if (reloadTimer <= 0) {
+        // Complete reload mathematics
+        const needed = 8 - ammoCurrent;
+        const transfer = Math.min(needed, ammoReserve);
+        ammoCurrent += transfer;
+        ammoReserve -= transfer;
+        isReloading = false;
+        updateUI();
+      }
+    }
+
+    // ZOMBIE INTELLIGENCE (AI Pathing)
+    zombies.forEach(z => {
+      if (z.isDead) return;
+
+      const mesh = z.mesh;
+      const dx = camera.position.x - mesh.position.x;
+      const dz = camera.position.z - mesh.position.z;
+      const dist = Math.sqrt(dx*dx + dz*dz);
+
+      // Handle Hit-Flinch feedback
+      if (z.flinchTimer > 0) {
+        z.flinchTimer -= dt;
+        mesh.translateZ(-1.5 * dt); // Push zombie back slightly when shot
+        mesh.rotation.x = -0.15;    // Lean them back
+        return;
+      } else {
+        mesh.rotation.x = 0;
+      }
+
+      // Track and follow player if in range
+      if (dist < 18 && dist > 1.0) {
+        mesh.lookAt(camera.position.x, 0.6, camera.position.z);
+        
+        const zSpeed = 0.85 * dt;
+        const nzx = mesh.position.x + (dx / dist) * zSpeed;
+        const nzz = mesh.position.z + (dz / dist) * zSpeed;
+        
+        if (!checkCollision(nzx, mesh.position.z)) mesh.position.x = nzx;
+        if (!checkCollision(mesh.position.x, nzz)) mesh.position.z = nzz;
+
+        // Shuffle wobble animation
+        z.animTime += dt * 4;
+        mesh.position.y = 0.6 + Math.abs(Math.sin(z.animTime)) * 0.05;
+        // Arm wobble
+        mesh.children[4].rotation.x = -0.1 + Math.sin(z.animTime) * 0.15;
+        mesh.children[5].rotation.x = -0.1 - Math.sin(z.animTime) * 0.15;
+      }
+    });
+  }
 
   renderer.render(scene, camera);
 }
