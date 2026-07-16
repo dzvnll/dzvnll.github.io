@@ -469,7 +469,7 @@ const len = Math.sqrt(mx*mx + mz*mz); if (len > 0) { mx=(mx/len)*speed; mz=(mz/l
 if (!checkCol(camera.position.x + mx, camera.position.z)) camera.position.x += mx; if (!checkCol(camera.position.x, camera.position.z + mz)) camera.position.z += mz;
 if (!isGrounded) { velY -= grav * dt;
 camera.position.y += velY * dt; if (camera.position.y <= 1.6) { camera.position.y = 1.6; velY = 0; isGrounded = true; }
-} playerBody.visible = true;
+} playerBody.visible = false;
 playerBody.position.set(camera.position.x + fwd.x*0.12, camera.position.y - 1.6, camera.position.z + fwd.z*0.12); playerBody.rotation.y = yaw;
 const prompt = document.getElementById('promptText'); if (nearBarrier() && pts >= BARRIER_COST) prompt.style.opacity = 1;
 else prompt.style.opacity = 0; sway += dt; const bob = performance.now() * 0.012;
