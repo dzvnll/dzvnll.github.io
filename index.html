@@ -1,1 +1,614 @@
-index
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DEAD HALLS</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; font-family:'Courier New', monospace; }
+  canvas { display:block; }
+
+  #crosshair {
+    position:fixed; top:50%; left:50%; width:6px; height:6px;
+    background:rgba(255,0,0,0.85); border-radius:50%;
+    transform:translate(-50%,-50%); z-index:15; pointer-events:none;
+    box-shadow:0 0 4px rgba(255,0,0,0.8);
+  }
+
+  #lookTip {
+    position:fixed; top:18px; left:50%; transform:translateX(-50%);
+    color:#bbb; font-size:0.8em; background:rgba(0,0,0,0.45);
+    padding:6px 14px; border-radius:4px; z-index:15; opacity:1;
+    transition:opacity 0.6s ease; pointer-events:none; letter-spacing:1px;
+  }
+  #lookTip.hide { opacity:0; }
+
+  #hint {
+    position:fixed; bottom:6%; left:50%; transform:translateX(-50%);
+    color:#ddd; font-size:0.95em; background:rgba(0,0,0,0.55);
+    padding:8px 16px; border-radius:4px; z-index:15; opacity:0;
+    transition:opacity 0.4s ease; pointer-events:none; letter-spacing:1px;
+  }
+  #hint.show { opacity:1; }
+
+  #vignette {
+    position:fixed; inset:0; pointer-events:none; z-index:10;
+    box-shadow: inset 0 0 180px 60px rgba(0,0,0,0.85);
+  }
+
+  /* cheap CSS-only haze/grain overlay -- zero render cost, no per-frame canvas work */
+  #grade {
+    position:fixed; inset:0; pointer-events:none; z-index:11;
+    background:
+      radial-gradient(ellipse at center, rgba(150,160,150,0.06) 0%, rgba(0,0,0,0.35) 100%);
+    mix-blend-mode:overlay;
+    opacity:0.6;
+  }
+</style>
+</head>
+<body>
+
+<div id="lookTip">WASD to move &nbsp;·&nbsp; Arrow Keys or mouse to look &nbsp;·&nbsp; click to enable mouse-look</div>
+
+<div id="crosshair"></div>
+<div id="vignette"></div>
+<div id="grade"></div>
+<div id="hint"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ------------------------------------------------------------------
+// SETUP
+// ------------------------------------------------------------------
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x15181a, 0.045); // cool desaturated haze, not flat black
+scene.background = new THREE.Color(0x15181a);
+
+const camera = new THREE.PerspectiveCamera(120, window.innerWidth/window.innerHeight, 0.01, 1000);
+camera.rotation.order = 'YXZ';
+camera.position.set(0, 1.7, 3);
+
+// LOW_RES_SCALE renders internally at a lower resolution then the browser
+// upscales it to fill the screen via CSS -- this is the single biggest lever
+// for frame rate on weak/integrated GPUs. Lower it further (e.g. 0.5) if it's
+// still choppy.
+const LOW_RES_SCALE = 0.65;
+
+const renderer = new THREE.WebGLRenderer({ antialias:false, powerPreference:'low-power' });
+renderer.setPixelRatio(1);
+renderer.shadowMap.enabled = false; // real-time shadows are the main perf killer -- keep off
+
+// Tone mapping + correct color output: this costs nothing extra per-frame
+// (it's one small math op tacked onto the shader's existing final step) but
+// gives a big jump in perceived realism -- proper highlight rolloff and
+// contrast instead of the flat, washed-out default look.
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+
+document.body.appendChild(renderer.domElement);
+renderer.domElement.style.width = '100%';
+renderer.domElement.style.height = '100%';
+
+function resizeRenderer(){
+  const w = Math.floor(window.innerWidth * LOW_RES_SCALE);
+  const h = Math.floor(window.innerHeight * LOW_RES_SCALE);
+  renderer.setSize(w, h, false); // false = don't touch CSS size, keep it fullscreen
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+}
+resizeRenderer();
+
+window.addEventListener('resize', resizeRenderer);
+
+// ------------------------------------------------------------------
+// TEXTURES (procedural blood-stained walls / floor)
+// ------------------------------------------------------------------
+function makeStainedTexture({ base='#d8d4cf', bloodAmount=18, size=256, floor=false, splatterScale=1 }) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = base;
+  ctx.fillRect(0,0,size,size);
+
+  // subtle grime/noise
+  for (let i=0;i<3000;i++){
+    const v = Math.random()*40;
+    ctx.fillStyle = `rgba(${v},${v},${v},0.03)`;
+    ctx.fillRect(Math.random()*size, Math.random()*size, 2, 2);
+  }
+
+  function splat(x, y, r, alpha) {
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.rotate(Math.random()*Math.PI*2);
+    const grad = ctx.createRadialGradient(0,0,0,0,0,r);
+    grad.addColorStop(0, `rgba(90,0,0,${alpha})`);
+    grad.addColorStop(0.5, `rgba(120,0,0,${alpha*0.7})`);
+    grad.addColorStop(1, `rgba(60,0,0,0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(0,0, r, r*(0.5+Math.random()*0.5), 0, 0, Math.PI*2);
+    ctx.fill();
+    // drips
+    const drips = 2 + Math.floor(Math.random()*4);
+    for (let d=0; d<drips; d++){
+      const dx = (Math.random()-0.5)*r*1.4;
+      const len = r*(0.8+Math.random()*2.2);
+      ctx.fillStyle = `rgba(80,0,0,${alpha*0.8})`;
+      ctx.beginPath();
+      ctx.ellipse(dx, r*0.3, r*0.06, len*0.5, 0,0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  for (let i=0;i<bloodAmount;i++){
+    const x = Math.random()*size;
+    const y = floor ? Math.random()*size : size*0.3 + Math.random()*size*0.7;
+    const r = (10 + Math.random()*40) * splatterScale;
+    splat(x,y,r, 0.55+Math.random()*0.35);
+  }
+
+  // handprint-ish smear occasionally
+  if (Math.random() < 0.9) {
+    ctx.save();
+    ctx.translate(size*(0.2+Math.random()*0.6), size*(0.3+Math.random()*0.5));
+    ctx.rotate(Math.random()*Math.PI);
+    ctx.fillStyle = 'rgba(70,0,0,0.5)';
+    for (let f=0; f<5; f++){
+      ctx.beginPath();
+      ctx.ellipse(f*14-28, 0, 7, 26, 0.3, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+const wallTexA = makeStainedTexture({ bloodAmount:10 });
+const wallTexB = makeStainedTexture({ bloodAmount:14 });
+const floorTex = makeStainedTexture({ bloodAmount:26, floor:true, base:'#cfcac2', splatterScale:1.3 });
+const ceilTex  = makeStainedTexture({ bloodAmount:4, base:'#e6e3dd' });
+
+// diffuse/color textures need sRGB encoding to look correct once tone
+// mapping is on -- this is a load-time flag, not a per-frame cost
+[wallTexA, wallTexB, floorTex, ceilTex].forEach(t => t.encoding = THREE.sRGBEncoding);
+
+// mild anisotropic filtering keeps the floor from turning into a blurry
+// smear at grazing angles -- modern GPU texture units (including
+// integrated ones) do this in hardware, so it's a very cheap upgrade;
+// clamped to 4 (instead of the device max) to stay safe on older cards
+const aniso = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+[wallTexA, wallTexB, floorTex, ceilTex].forEach(t => t.anisotropy = aniso);
+
+// ------------------------------------------------------------------
+// SHARED BUMP MAP -- a small (128px) grayscale grunge/crack texture used
+// as a bumpMap on every surface. This is generated once at load (zero
+// per-frame cost) and adds a lot of "real surface" feel under the point
+// lights for the price of one extra texture sample per pixel in the
+// fragment shader -- trivial even on integrated GPUs.
+// ------------------------------------------------------------------
+function makeBumpTexture(size=128) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#808080'; // neutral mid-gray = no bump
+  ctx.fillRect(0,0,size,size);
+
+  for (let i=0;i<900;i++){
+    const v = 95 + Math.random()*90;
+    ctx.fillStyle = `rgb(${v},${v},${v})`;
+    ctx.fillRect(Math.random()*size, Math.random()*size, 1.5, 1.5);
+  }
+
+  ctx.strokeStyle = 'rgba(40,40,40,0.55)';
+  ctx.lineWidth = 1;
+  for (let c=0;c<7;c++){
+    let x = Math.random()*size, y = Math.random()*size;
+    ctx.beginPath();
+    ctx.moveTo(x,y);
+    for (let s=0;s<5;s++){
+      x += (Math.random()-0.5)*30;
+      y += (Math.random()-0.5)*30;
+      ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+const sharedBump = makeBumpTexture();
+
+const wallMatA = new THREE.MeshPhongMaterial({ map: wallTexA, bumpMap: sharedBump, bumpScale: 0.02, shininess: 12, specular: 0x141414 });
+const wallMatB = new THREE.MeshPhongMaterial({ map: wallTexB, bumpMap: sharedBump, bumpScale: 0.02, shininess: 12, specular: 0x141414 });
+const floorMat = new THREE.MeshPhongMaterial({ map: floorTex, bumpMap: sharedBump, bumpScale: 0.025, shininess: 28, specular: 0x2a2a2a }); // slightly wetter/shinier -- blood on a floor catches more light
+const ceilMat  = new THREE.MeshPhongMaterial({ map: ceilTex, bumpMap: sharedBump, bumpScale: 0.015, shininess: 8, specular: 0x0f0f0f });
+
+// ------------------------------------------------------------------
+// ROOM DIMENSIONS
+// Room 1 (player room):  x -5..5   z -1..9    (player starts z=3)
+// Divider wall at z = 9, with a viewing hole
+// Room 2 (beyond):        z 9..19  (player can never actually cross into it)
+// ------------------------------------------------------------------
+const ROOM_W = 10;     // x: -5..5
+const HEIGHT = 4.2;
+const ROOM1_Z0 = -1, ROOM1_Z1 = 9;
+const DIVIDER_Z = 9;
+const ROOM2_Z1 = 19;
+
+function box(w,h,d,mat){ return new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat); }
+
+// --- Room 1 floor / ceiling ---
+const floor1 = box(ROOM_W, 0.2, ROOM1_Z1-ROOM1_Z0, floorMat);
+floor1.position.set(0, -0.1, (ROOM1_Z0+ROOM1_Z1)/2);
+
+scene.add(floor1);
+
+const ceil1 = box(ROOM_W, 0.2, ROOM1_Z1-ROOM1_Z0, ceilMat);
+ceil1.position.set(0, HEIGHT+0.1, (ROOM1_Z0+ROOM1_Z1)/2);
+scene.add(ceil1);
+
+// --- Room 1 side walls ---
+const wallL = box(0.2, HEIGHT, ROOM1_Z1-ROOM1_Z0, wallMatA);
+wallL.position.set(-5, HEIGHT/2, (ROOM1_Z0+ROOM1_Z1)/2);
+scene.add(wallL);
+
+const wallR = box(0.2, HEIGHT, ROOM1_Z1-ROOM1_Z0, wallMatA);
+wallR.position.set(5, HEIGHT/2, (ROOM1_Z0+ROOM1_Z1)/2);
+scene.add(wallR);
+
+// --- Back wall (behind player spawn) with the door ---
+const backWall = box(ROOM_W, HEIGHT, 0.2, wallMatB);
+backWall.position.set(0, HEIGHT/2, ROOM1_Z0);
+scene.add(backWall);
+
+// Door: frame + a dark door slab, leads nowhere for now
+const doorGroup = new THREE.Group();
+const doorFrameMat = new THREE.MeshLambertMaterial({ color:0x1a1a1a });
+const doorMat = new THREE.MeshLambertMaterial({ color:0x2b1b14 });
+
+const doorFrame = box(1.6, 2.8, 0.15, doorFrameMat);
+doorFrame.position.set(0, 1.4, ROOM1_Z0+0.08);
+doorGroup.add(doorFrame);
+
+const doorSlab = box(1.3, 2.5, 0.08, doorMat);
+doorSlab.position.set(0, 1.3, ROOM1_Z0+0.15);
+doorGroup.add(doorSlab);
+
+// door handle
+const handleMat = new THREE.MeshLambertMaterial({ color:0x777770 });
+const handle = new THREE.Mesh(new THREE.SphereGeometry(0.05,12,12), handleMat);
+handle.position.set(0.5, 1.3, ROOM1_Z0+0.2);
+doorGroup.add(handle);
+
+scene.add(doorGroup);
+const DOOR_MESHES = [doorFrame, doorSlab, handle];
+
+// ------------------------------------------------------------------
+// DIVIDER WALL with a viewing hole (built from segments around a gap)
+// Hole: centered at x=0, height range ~1.0 to 2.4 (eye level), width 2.0
+// ------------------------------------------------------------------
+const holeW = 2.0, holeH = 1.4, holeCenterY = 1.7;
+const holeX0 = -holeW/2, holeX1 = holeW/2;
+const holeY0 = holeCenterY - holeH/2, holeY1 = holeCenterY + holeH/2;
+
+const dividerGroup = new THREE.Group();
+
+// left segment (full height, from -5 to holeX0)
+const leftW = holeX0 - (-5);
+const segLeft = box(leftW, HEIGHT, 0.3, wallMatA);
+segLeft.position.set(-5 + leftW/2, HEIGHT/2, DIVIDER_Z);
+dividerGroup.add(segLeft);
+
+// right segment
+const rightW = 5 - holeX1;
+const segRight = box(rightW, HEIGHT, 0.3, wallMatA);
+segRight.position.set(holeX1 + rightW/2, HEIGHT/2, DIVIDER_Z);
+dividerGroup.add(segRight);
+
+// bottom segment (under the hole)
+const segBottom = box(holeW, holeY0, 0.3, wallMatA);
+segBottom.position.set(0, holeY0/2, DIVIDER_Z);
+dividerGroup.add(segBottom);
+
+// top segment (above the hole, up to ceiling)
+const topH = HEIGHT - holeY1;
+const segTop = box(holeW, topH, 0.3, wallMatA);
+segTop.position.set(0, holeY1 + topH/2, DIVIDER_Z);
+dividerGroup.add(segTop);
+
+// jagged edge trim around the hole (torn drywall look)
+const trimMat = new THREE.MeshLambertMaterial({ color:0x8a8378 });
+function torn(x,y,z,w,h,rotY){
+  const m = box(w,h,0.32,trimMat);
+  m.position.set(x,y,z);
+  if (rotY) m.rotation.y = rotY;
+  dividerGroup.add(m);
+}
+for (let i=0;i<10;i++){
+  const t = i/9;
+  const px = holeX0 + t*holeW;
+  torn(px, holeY1 + (Math.random()*0.15), DIVIDER_Z, 0.25+Math.random()*0.2, 0.05+Math.random()*0.2);
+  torn(px, holeY0 - (Math.random()*0.1), DIVIDER_Z, 0.25+Math.random()*0.2, 0.05+Math.random()*0.15);
+}
+
+scene.add(dividerGroup);
+
+// ------------------------------------------------------------------
+// ROOM 2 (seen through the hole, unreachable) - dim, foggier, decayed
+// ------------------------------------------------------------------
+const room2Mat = new THREE.MeshLambertMaterial({ map: wallTexB, color:0x9a9490 });
+
+const floor2 = box(ROOM_W, 0.2, ROOM2_Z1-DIVIDER_Z, floorMat);
+floor2.position.set(0, -0.1, (DIVIDER_Z+ROOM2_Z1)/2);
+scene.add(floor2);
+
+const ceil2 = box(ROOM_W, 0.2, ROOM2_Z1-DIVIDER_Z, ceilMat);
+ceil2.position.set(0, HEIGHT+0.1, (DIVIDER_Z+ROOM2_Z1)/2);
+scene.add(ceil2);
+
+const wallL2 = box(0.2, HEIGHT, ROOM2_Z1-DIVIDER_Z, room2Mat);
+wallL2.position.set(-5, HEIGHT/2, (DIVIDER_Z+ROOM2_Z1)/2);
+scene.add(wallL2);
+
+const wallR2 = box(0.2, HEIGHT, ROOM2_Z1-DIVIDER_Z, room2Mat);
+wallR2.position.set(5, HEIGHT/2, (DIVIDER_Z+ROOM2_Z1)/2);
+scene.add(wallR2);
+
+const farWall2 = box(ROOM_W, HEIGHT, 0.2, room2Mat);
+farWall2.position.set(0, HEIGHT/2, ROOM2_Z1);
+scene.add(farWall2);
+
+// a silhouette shape lurking in room 2, just out of clear view
+// (built from cylinder + sphere since CapsuleGeometry needs a newer three.js)
+const lurkMat = new THREE.MeshLambertMaterial({ color:0x050505 });
+const lurkerGroup = new THREE.Group();
+
+const lurkerBody = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.32, 1.3, 10), lurkMat);
+lurkerBody.position.y = 0.65;
+lurkerGroup.add(lurkerBody);
+
+const lurkerHead = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 10), lurkMat);
+lurkerHead.position.y = 1.42;
+lurkerGroup.add(lurkerHead);
+
+lurkerGroup.position.set(2.4, 0.35, DIVIDER_Z + 4.5);
+scene.add(lurkerGroup);
+
+// ------------------------------------------------------------------
+// VIEWMODEL -- shotgun + forearms, held up diagonally like the reference
+// screenshot. Parented to the camera so it moves/rotates with it for free.
+// Uses proper lit materials (see below) so it's shaded by the room's
+// lighting instead of looking like a flat unlit cutout.
+//
+// Every part is built with makeSegment(), which stretches a cylinder
+// between two exact 3D points and orients it to match. That's the fix for
+// the "pickaxe" look: before, the gun pieces and the arm pieces each had
+// their own hand-guessed rotation, so they pointed in different directions
+// and read as two crossed sticks. Now everything (stock, receiver, barrel,
+// AND both arms) is placed along -- or reaching toward -- one real diagonal
+// line running from the stock near the bottom of the screen up to the
+// muzzle near the top, so it reads as one held object.
+// ------------------------------------------------------------------
+const viewmodel = new THREE.Group();
+
+// Switched from MeshBasicMaterial (unlit, flat) to lit materials so the
+// gun and arms actually get shaded by the flicker light as you move
+// around -- a big realism jump for almost no cost since this is only a
+// handful of small shapes. Cloth/wood stay matte MeshLambertMaterial;
+// the metal parts get MeshPhongMaterial for a proper specular glint.
+const sleeveMat   = new THREE.MeshLambertMaterial({ color:0x14120f });
+const gunMetalMat = new THREE.MeshPhongMaterial({ color:0x0d0d0d, shininess:70, specular:0x777766 });
+const gunWoodMat  = new THREE.MeshLambertMaterial({ color:0x2a1c10 });
+const handMat     = new THREE.MeshLambertMaterial({ color:0x3a2c22 });
+
+function makeSegment(pStart, pEnd, radiusStart, radiusEnd, material, radialSegments=8){
+  const start = new THREE.Vector3(...pStart);
+  const end = new THREE.Vector3(...pEnd);
+  const dir = new THREE.Vector3().subVectors(end, start);
+  const length = dir.length();
+  const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+
+  const geo = new THREE.CylinderGeometry(radiusEnd, radiusStart, length, radialSegments);
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.position.copy(mid);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.clone().normalize());
+  return mesh;
+}
+
+// the gun's centerline, from butt of the stock (near, bottom-right)
+// to the muzzle tip (far, upper area) -- everything else is built relative
+// to points along this one line
+const STOCK_END = [0.30, -0.56, -0.12];
+const MID       = [0.14, -0.20, -0.62];
+const FRONT     = [0.02,  0.10, -1.05];
+const MUZZLE    = [-0.06, 0.30, -1.55];
+
+// stock (wood) -- thick near the shoulder end, narrowing into the receiver
+viewmodel.add(makeSegment(STOCK_END, MID, 0.075, 0.05, gunWoodMat, 8));
+
+// receiver / pump housing (fatter dark metal block along the same line)
+viewmodel.add(makeSegment(MID, FRONT, 0.06, 0.055, gunMetalMat, 8));
+
+// barrel (thin metal, tapering slightly toward the muzzle)
+viewmodel.add(makeSegment(FRONT, MUZZLE, 0.032, 0.024, gunMetalMat, 10));
+
+// muzzle bead sight
+const bead = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 8), gunMetalMat);
+bead.position.set(...MUZZLE);
+viewmodel.add(bead);
+
+// trigger guard, hanging just under the receiver
+const guard = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.008, 6, 10), gunMetalMat);
+guard.position.set(MID[0]+0.01, MID[1]-0.07, MID[2]+0.04);
+guard.rotation.x = Math.PI/2;
+viewmodel.add(guard);
+
+// right forearm -- reaches from off-screen bottom-right up to the
+// receiver/trigger area, matching the gun's own diagonal rather than
+// crossing against it
+const RIGHT_SHOULDER = [0.42, -0.95, -0.05];
+const GRIP_R = [MID[0]+0.05, MID[1]-0.04, MID[2]+0.05];
+viewmodel.add(makeSegment(RIGHT_SHOULDER, GRIP_R, 0.075, 0.06, sleeveMat));
+const handR = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 8), handMat);
+handR.position.set(...GRIP_R);
+viewmodel.add(handR);
+
+// left forearm -- reaches up to the front grip / pump, further out along
+// the same barrel line, giving the classic "supporting hand forward" pose
+const LEFT_SHOULDER = [-0.30, -0.9, -0.05];
+const GRIP_L = [FRONT[0]-0.03, FRONT[1]-0.05, FRONT[2]+0.05];
+viewmodel.add(makeSegment(LEFT_SHOULDER, GRIP_L, 0.07, 0.055, sleeveMat));
+const handL = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), handMat);
+handL.position.set(...GRIP_L);
+viewmodel.add(handL);
+
+camera.add(viewmodel);
+scene.add(camera); // camera must be in the scene graph for its children (viewmodel) to render
+
+let swayT = 0;
+
+// ------------------------------------------------------------------
+// LIGHTING
+// ------------------------------------------------------------------
+// HemisphereLight costs exactly the same as AmbientLight (one uniform,
+// no shadow, no extra pass) but blends a cool "sky" tone from above with a
+// dim bloody "ground" tone from below, instead of one flat gray -- reads
+// as much more like real bounced light for zero extra performance.
+const hemi = new THREE.HemisphereLight(0x8a97a0, 0x2a1210, 0.6);
+scene.add(hemi);
+
+const flicker = new THREE.PointLight(0xffe8c0, 1.4, 12, 2);
+flicker.position.set(0, 3.8, 2.5);
+
+scene.add(flicker);
+
+const room2Light = new THREE.PointLight(0x2a1010, 0.6, 10, 2);
+room2Light.position.set(0, 3, DIVIDER_Z + 5);
+scene.add(room2Light);
+
+let flickerTime = 0;
+function updateFlicker(dt){
+  flickerTime += dt;
+  const n = Math.sin(flickerTime*37) * Math.sin(flickerTime*13.7);
+  flicker.intensity = 1.1 + n*0.35 + (Math.random()<0.02 ? -0.9 : 0);
+}
+
+// ------------------------------------------------------------------
+// POINTER LOCK + MOVEMENT
+// ------------------------------------------------------------------
+let yaw = 0, pitch = 0;
+let locked = false;
+
+const lookTip = document.getElementById('lookTip');
+document.body.addEventListener('click', () => {
+  if (!locked) document.body.requestPointerLock();
+});
+
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === document.body;
+  if (locked) lookTip.classList.add('hide');
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!locked) return;
+  const sensitivity = 0.0022;
+  yaw -= e.movementX * sensitivity;
+  pitch -= e.movementY * sensitivity;
+  pitch = Math.max(-Math.PI/2 + 0.01, Math.min(Math.PI/2 - 0.01, pitch));
+});
+
+const keys = {};
+const ARROW_KEYS = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
+document.addEventListener('keydown', (e) => {
+  keys[e.code] = true;
+  if (ARROW_KEYS.includes(e.code)) e.preventDefault(); // stop page scroll
+});
+document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+// raycaster for interacting with the door
+const raycaster = new THREE.Raycaster();
+const hintEl = document.getElementById('hint');
+let hintTimeout = null;
+function showHint(text){
+  hintEl.textContent = text;
+  hintEl.classList.add('show');
+  clearTimeout(hintTimeout);
+  hintTimeout = setTimeout(() => hintEl.classList.remove('show'), 2200);
+}
+
+document.addEventListener('mousedown', (e) => {
+  if (!locked || e.button !== 0) return;
+  raycaster.setFromCamera({x:0,y:0}, camera);
+  const hits = raycaster.intersectObjects(DOOR_MESHES);
+  if (hits.length > 0 && hits[0].distance < 3.2) {
+    showHint("It won't open. Not yet.");
+  }
+});
+
+// movement bounds -- player is confined to room 1, and can never
+// physically cross the divider even though they can see through the hole
+const BOUND = { minX:-4.6, maxX:4.6, minZ:ROOM1_Z0+0.5, maxZ:ROOM1_Z1-0.5 };
+
+const clock = new THREE.Clock();
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  updateFlicker(dt);
+
+  // arrow keys rotate the view (an alternative to mouse-look) --
+  // independent of pointer lock, so they work even before the mouse is enabled
+  const turnSpeed = 1.8; // radians per second
+  if (keys['ArrowLeft'])  yaw += turnSpeed * dt;
+  if (keys['ArrowRight']) yaw -= turnSpeed * dt;
+  if (keys['ArrowUp'])    pitch += turnSpeed * dt;
+  if (keys['ArrowDown'])  pitch -= turnSpeed * dt;
+  pitch = Math.max(-Math.PI/2 + 0.01, Math.min(Math.PI/2 - 0.01, pitch));
+
+  camera.rotation.set(pitch, yaw, 0, 'YXZ');
+
+  // movement works immediately, no pointer lock required —
+  // only mouse-look (yaw/pitch above) is gated on lock, via the mousemove listener
+  const speed = (keys['ShiftLeft'] ? 4.2 : 2.6) * dt;
+  const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  const right = new THREE.Vector3(-forward.z, 0, forward.x);
+
+  const move = new THREE.Vector3();
+  if (keys['KeyW']) move.add(forward);
+  if (keys['KeyS']) move.sub(forward);
+  if (keys['KeyD']) move.add(right);
+  if (keys['KeyA']) move.sub(right);
+  if (move.lengthSq() > 0) move.normalize().multiplyScalar(speed);
+
+  camera.position.x += move.x;
+  camera.position.z += move.z;
+
+  camera.position.x = Math.max(BOUND.minX, Math.min(BOUND.maxX, camera.position.x));
+  camera.position.z = Math.max(BOUND.minZ, Math.min(BOUND.maxZ, camera.position.z));
+
+  // subtle head bob
+  const bobT = performance.now()*0.006;
+  const moving = move.lengthSq() > 0;
+  camera.position.y = 1.7 + (moving ? Math.sin(bobT*2)*0.02 : 0);
+
+  // viewmodel sway -- gently drifts and bobs a bit more than the head does,
+  // just enough to feel handheld without any extra render cost
+  swayT += dt;
+  viewmodel.position.x = Math.sin(swayT*0.8) * 0.01;
+  viewmodel.position.y = (moving ? Math.sin(bobT*2)*0.012 : Math.sin(swayT*1.1)*0.004);
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
