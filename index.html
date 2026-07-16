@@ -333,8 +333,9 @@ function makeCylinderBone(rT, rB, h, mat, shiftY) {
 const loader = new THREE.GLTFLoader(); 
 
 function spawnZombie(x, z, spdMult) {
-  // We use './' to tell the browser "look in the current folder"
-  loader.load('./zombie.glb', (gltf) => {
+  // Replace your loader.load line with this one
+loader.load('https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Box/glTF/Box.gltf', (gltf) => {
+  
     const model = gltf.scene;
     model.position.set(x, 0, z);
     
