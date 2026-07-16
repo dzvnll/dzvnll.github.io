@@ -71,31 +71,31 @@ p.sub { font-size: 24px; margin-bottom: 40px; color: #aaa; text-align: center; }
 </head>
 <body>
 <div id="hud">
-    <div class="hud-text" id="waveNotice">WAVE <span id="waveNoticeNum">1</span></div>
-    <div class="hud-text" id="round">ROUND <span id="roundNumber">1</span></div>
+    <div class="hud-text" id="waveNotice">wave <span id="waveNoticeNum">1</span></div>
+    <div class="hud-text" id="round">round <span id="roundNumber">1</span></div>
     <div class="hud-text" id="points">500</div>
     <div class="hud-text" id="ammo"><span id="ammoCurrent">8</span> / <span id="ammoReserve" style="color:#888">32</span></div>
-    <div class="hud-text" id="promptText">PRESS E TO INTERACT</div>
+    <div class="hud-text" id="promptText">E</div>
     <div id="hpWrap" class="hud-text"><div id="hpFill"></div></div>
 </div>
 <div id="dmgVignette"></div><div id="crosshair"></div><div id="hitmarker">✕</div>
 
 <div id="mainMenu" class="menu-overlay">
-    <h1>DEAD HALLS: HD</h1>
-    <p class="sub">1: HANDS &nbsp;|&nbsp; 2: SHOTGUN &nbsp;|&nbsp; 3: ASSAULT RIFLE</p>
-    <button class="btn" id="startBtn">START</button>
-    <button class="btn" id="settingsBtn">SETTINGS</button>
+    <h1>deadhalls</h1>
+    <p class="sub"> &nbsp;|&nbsp;  &nbsp;|&nbsp; </p>
+    <button class="btn" id="startBtn"></button>
+    <button class="btn" id="settingsBtn"></button>
 </div>
 <div id="settingsMenu" class="menu-overlay">
-    <h1>Settings</h1>
+    <h1>settings</h1>
     <div class="settings-row"><label>Sensitivity</label><input type="range" id="sensSlider" min="1" max="10" value="4"></div>
     <div class="settings-row">
-        <label>Resolution Scale</label>
+        <label>resolution scale</label>
         <select id="resSelect">
             <option value="0.5">Low</option><option value="0.75">Medium</option><option value="1" selected>Native</option>
         </select>
     </div>
-    <button class="btn" id="settingsBackBtn" style="margin-top:30px;">BACK</button>
+    <button class="btn" id="settingsBackBtn" style="margin-top:30px;">back</button>
 </div>
 <div id="pauseMenu" class="menu-overlay">
     <h1>PAUSED</h1><button class="btn" id="resumeBtn">RESUME</button><button class="btn" id="leaveBtn">LEAVE</button>
