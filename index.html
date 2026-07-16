@@ -99,6 +99,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script>
 // ------------------------------------------------------------------
 // ENGINE & STATE
@@ -329,40 +330,36 @@ function makeCylinderBone(rT, rB, h, mat, shiftY) {
   return m;
 }
 
+const loader = new THREE.GLTFLoader(); 
+
 function spawnZombie(x, z, spdMult) {
-  const root = new THREE.Group();
-  
-  // Torso
-  const torso = makeCylinderBone(0.25, 0.22, 0.75, matZShirt, 0.375);
-  torso.position.y = 0.9; root.add(torso);
+  // IF YOUR FILE IS IN A FOLDER, CHANGE 'zombie.glb' TO 'models/zombie.glb'
+  loader.load('zombie.glb', (gltf) => {
+    const model = gltf.scene;
+    
+    // Position it
+    model.position.set(x, 0, z);
+    
+    // SCALE: If your zombie is invisible, it might be too small or too big.
+    // Try changing 1 to 5 or 0.1
+    model.scale.set(1, 1, 1); 
 
-  // Spherical Head
-  const headGeo = new THREE.SphereGeometry(0.22, 12, 12);
-  headGeo.translate(0, 0.2, 0); // Shift pivot to neck
-  headGeo.rotateY(Math.PI); // Rotate texture to face front
-  const head = new THREE.Mesh(headGeo, matZFace);
-  head.position.y = 0.75; head.castShadow = true; torso.add(head);
+    // Add shadows
+    model.traverse((node) => {
+      if (node.isMesh) {
+        node.castShadow = true;
+        node.receiveShadow = true;
+      }
+    });
 
-  // Arms
-  const armL = makeCylinderBone(0.08, 0.06, 0.7, matZSkin, -0.35);
-  armL.position.set(-0.32, 0.7, 0); armL.rotation.x = -Math.PI/2 + 0.2; torso.add(armL);
-  
-  const armR = makeCylinderBone(0.08, 0.06, 0.7, matZSkin, -0.35);
-  armR.position.set(0.32, 0.7, 0); armR.rotation.x = -Math.PI/2 + 0.2; torso.add(armR);
-
-  // Legs
-  const legL = makeCylinderBone(0.12, 0.09, 0.9, matZPants, -0.45);
-  legL.position.set(-0.15, 0, 0); torso.add(legL);
-
-  const legR = makeCylinderBone(0.12, 0.09, 0.9, matZPants, -0.45);
-  legR.position.set(0.15, 0, 0); torso.add(legR);
-
-  root.position.set(x, 0, z);
-  scene.add(root);
-
-  const data = { mesh: root, hp: 100, isDead: false, animTime: Math.random()*10, speed: 1.8 * spdMult, parts: [torso, head, armL, armR, legL, legR] };
-  zombies.push(data);
-  root.traverse(c => { if(c.isMesh) { c.userData.zData = data; targets.push(c); } });
+    scene.add(model);
+    
+    const data = { mesh: model, hp: 100, isDead: false, speed: 1.8 * spdMult };
+    zombies.push(data);
+    
+    // This allows your gun to hit the model
+    model.traverse(c => { if(c.isMesh) { c.userData.zData = data; targets.push(c); } });
+  });
 }
 
 // ------------------------------------------------------------------
