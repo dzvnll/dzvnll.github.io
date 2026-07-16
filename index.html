@@ -98,8 +98,8 @@
   <button class="btn" id="leaveBtn">LEAVE MAP</button>
 </div>
 
+<!-- Removed GLTFLoader to avoid broken CDN / CORS issues. Native rendering only. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script>
 // ------------------------------------------------------------------
 // ENGINE & STATE
@@ -136,7 +136,7 @@ resize();
 // ------------------------------------------------------------------
 function makeTex(type) {
   const c = document.createElement('canvas');
-  c.width = 128; c.height = 128; // Higher res for characters
+  c.width = 128; c.height = 128; 
   const ctx = c.getContext('2d');
 
   if (type === 'wall') {
@@ -150,39 +150,31 @@ function makeTex(type) {
   } else if (type === 'wood') {
     ctx.fillStyle = '#2e1c10'; ctx.fillRect(0,0,128,128);
   } else if (type === 'zFace') {
-    // UV Mapped Zombie Face
-    ctx.fillStyle = '#6d7560'; ctx.fillRect(0,0,128,128); // Pale dead skin
-    // Eyes
+    ctx.fillStyle = '#6d7560'; ctx.fillRect(0,0,128,128); 
     ctx.fillStyle = '#111'; ctx.fillRect(40, 48, 12, 12); ctx.fillRect(76, 48, 12, 12);
-    // Mouth/Blood
     ctx.fillStyle = '#3a0000'; ctx.fillRect(50, 80, 28, 20);
-    // Bloody neck
     ctx.fillStyle = 'rgba(60,0,0,0.5)'; ctx.fillRect(0, 110, 128, 18);
   } else if (type === 'zShirt') {
-    // UV Mapped Dirty Shirt
     ctx.fillStyle = '#4a5057'; ctx.fillRect(0,0,128,128);
-    ctx.fillStyle = '#2c3035'; ctx.fillRect(0, 0, 128, 15); // Collar
-    // Blood stains
+    ctx.fillStyle = '#2c3035'; ctx.fillRect(0, 0, 128, 15); 
     ctx.fillStyle = '#400';
     ctx.beginPath(); ctx.arc(64, 50, 30, 0, Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(90, 80, 20, 0, Math.PI*2); ctx.fill();
   } else if (type === 'zPants') {
-    // UV Mapped Jeans
     ctx.fillStyle = '#2c3545'; ctx.fillRect(0,0,128,128);
-    ctx.fillStyle = '#111'; ctx.fillRect(0, 0, 128, 12); // Belt
-    ctx.fillStyle = '#1c1612'; ctx.fillRect(0, 100, 128, 28); // Mud at bottom
+    ctx.fillStyle = '#111'; ctx.fillRect(0, 0, 128, 12); 
+    ctx.fillStyle = '#1c1612'; ctx.fillRect(0, 100, 128, 28); 
   } else if (type === 'skin') {
     ctx.fillStyle = '#b59982'; ctx.fillRect(0,0,128,128);
   } else if (type === 'gunMetal') {
     ctx.fillStyle = '#2a2a2c'; ctx.fillRect(0,0,128,128);
   }
 
-  // Gritty heavy noise pass
   for (let i = 0; i < 4000; i++) {
     const r = Math.random();
     if (r > 0.5) ctx.fillStyle = 'rgba(0,0,0,0.4)';
     else if (r > 0.1) ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    else if (type === 'wall' || type === 'floor') ctx.fillStyle = 'rgba(60, 5, 5, 0.5)'; // Blood specks
+    else if (type === 'wall' || type === 'floor') ctx.fillStyle = 'rgba(60, 5, 5, 0.5)'; 
     else ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(Math.floor(Math.random()*64)*2, Math.floor(Math.random()*64)*2, 2, 2);
   }
@@ -272,7 +264,7 @@ pLegR.position.set(0.15, 0.45, 0); pLegR.castShadow = true; playerBody.add(pLegR
 scene.add(playerBody);
 
 // ------------------------------------------------------------------
-// VIEWMODELS (Hands & Shotgun) - Rebuilt with Cylinders
+// VIEWMODELS (Hands & Shotgun)
 // ------------------------------------------------------------------
 const viewmodel = new THREE.Group();
 const vmShotgun = new THREE.Group();
@@ -281,7 +273,6 @@ const vmHands = new THREE.Group();
 const matGunMetal = new THREE.MeshLambertMaterial({ map: makeTex('gunMetal') });
 const matGunWood = new THREE.MeshLambertMaterial({ map: makeTex('wood') });
 
-// Real-ish Shotgun (Cylinders)
 const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.0, 8), matGunMetal);
 barrel.rotation.x = Math.PI / 2; barrel.position.set(0.25, -0.22, -0.6); vmShotgun.add(barrel);
 
@@ -300,7 +291,6 @@ stock.position.set(0.25, -0.28, 0.15); stock.rotation.x = -0.15; vmShotgun.add(s
 const flash = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.4), new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, side: THREE.DoubleSide }));
 flash.position.set(0.25, -0.22, -1.15); flash.visible = false; vmShotgun.add(flash);
 
-// Cylindrical Bare Hands
 const hLeft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.4, 8), matSkin);
 hLeft.rotation.x = Math.PI / 2; hLeft.position.set(-0.35, -0.25, -0.4); vmHands.add(hLeft);
 const hRight = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.4, 8), matSkin);
@@ -315,48 +305,72 @@ scene.add(camera);
 // REAL-ISH SKELETAL ZOMBIES (GMOD/HL1 Style)
 // ------------------------------------------------------------------
 const zombies = [];
-let targets = []; // Changed to let so we can re-assign when filtering despawns
+let targets = [];
 
 const matZFace = new THREE.MeshLambertMaterial({ map: makeTex('zFace') });
 const matZShirt = new THREE.MeshLambertMaterial({ map: makeTex('zShirt') });
 const matZPants = new THREE.MeshLambertMaterial({ map: makeTex('zPants') });
-const matZSkin = new THREE.MeshLambertMaterial({ map: makeTex('zFace') }); 
 
 function makeCylinderBone(rT, rB, h, mat, shiftY) {
   const geo = new THREE.CylinderGeometry(rT, rB, h, 8);
-  geo.translate(0, shiftY, 0);
+  geo.translate(0, shiftY, 0); // Sets pivot point for proper animation swinging
   const m = new THREE.Mesh(geo, mat);
   m.castShadow = true; m.receiveShadow = true;
   return m;
 }
 
-const loader = new THREE.GLTFLoader(); 
-
+// Procedurally generate the zombie skeleton so our animation loop's z.parts logic works
 function spawnZombie(x, z, spdMult) {
-  // Replace your loader.load line with this one
-loader.load('https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Box/glTF/Box.gltf', (gltf) => {
+  const zGroup = new THREE.Group();
+  zGroup.position.set(x, 0, z);
+
+  // Clone materials per zombie so the damage flash doesn't affect all of them at once
+  const mFace = matZFace.clone();
+  const mShirt = matZShirt.clone();
+  const mPants = matZPants.clone();
+
+  // Torso
+  const torso = makeCylinderBone(0.25, 0.22, 0.7, mShirt, 0);
+  torso.position.y = 0.9;
   
-    const model = gltf.scene;
-    model.position.set(x, 0, z);
-    
-    // Scale it (If it's too big/small, change these numbers)
-    model.scale.set(1, 1, 1); 
+  // Head
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), mFace);
+  head.position.y = 0.5; 
+  head.castShadow = true; 
+  torso.add(head);
 
-    model.traverse((node) => {
-      if (node.isMesh) {
-        node.castShadow = true;
-        node.receiveShadow = true;
-      }
-    });
+  // Arms (Pivot from the shoulder)
+  const aL = makeCylinderBone(0.08, 0.08, 0.6, mShirt, -0.3);
+  aL.position.set(-0.35, 0.25, 0); 
+  torso.add(aL);
+  
+  const aR = makeCylinderBone(0.08, 0.08, 0.6, mShirt, -0.3);
+  aR.position.set(0.35, 0.25, 0); 
+  torso.add(aR);
 
-    scene.add(model);
-    
-    const data = { mesh: model, hp: 100, isDead: false, speed: 1.8 * spdMult };
-    zombies.push(data);
-    
-    model.traverse(c => { if(c.isMesh) { c.userData.zData = data; targets.push(c); } });
+  // Legs (Pivot from the hip)
+  const lL = makeCylinderBone(0.1, 0.08, 0.8, mPants, -0.4);
+  lL.position.set(-0.15, 0.8, 0); 
+  zGroup.add(lL);
+  
+  const lR = makeCylinderBone(0.1, 0.08, 0.8, mPants, -0.4);
+  lR.position.set(0.15, 0.8, 0); 
+  zGroup.add(lR);
+
+  zGroup.add(torso);
+  scene.add(zGroup);
+
+  // Define structural parts array for the animation & hit detection loop
+  const parts = [torso, head, aL, aR, lL, lR];
+  const data = { mesh: zGroup, parts: parts, hp: 100, isDead: false, speed: 1.8 * spdMult, animTime: Math.random() * 10 };
+  zombies.push(data);
+
+  parts.forEach(p => { 
+    p.userData.zData = data; 
+    targets.push(p); 
   });
 }
+
 // ------------------------------------------------------------------
 // WAVE SYSTEM
 // ------------------------------------------------------------------
@@ -588,8 +602,8 @@ function animate() {
         // Fully purge from the scene and memory when they sink below the map
         if (mesh.position.y < -2.0) {
             scene.remove(mesh);
-            targets = targets.filter(t => t.userData.zData !== z); // Remove from raycasting
-            zombies.splice(i, 1); // Remove from logic array
+            targets = targets.filter(t => t.userData.zData !== z);
+            zombies.splice(i, 1);
         }
         continue;
       }
