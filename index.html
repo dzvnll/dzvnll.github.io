@@ -47,21 +47,23 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 .btn { background: #1a0000; color: #fff; border: 4px solid #4a0000; padding: 15px 40px; font-size: 32px; font-family: inherit; cursor: pointer; margin: 10px; width: 350px; transition: all 0.1s; text-shadow: 2px 2px 0 #000; }
 .btn:hover { background: #4a0000; border-color: #ffcc00; transform: scale(1.05); color: #ffcc00; }
 .btn:active { transform: scale(0.95); }
-#pauseMenu, #gameOverMenu, #settingsMenu { display: none; }
+#pauseMenu, #gameOverMenu, #settingsMenu, #accountMenu, #adminMenu { display: none; }
 #mainMenu { display: flex; align-items: stretch; justify-content: flex-start; }
 .dvd-diagonal { position: absolute; height: 2px; width: 700px; background-image: repeating-linear-gradient(90deg, #ddd 0 14px, transparent 14px 26px); opacity: 0.8; }
 .dvd-diagonal.top { top: 22%; right: -60px; transform: rotate(-20deg); }
-.dvd-diagonal.bottom { bottom: 8%; left: 4%; width: 90%; transform: rotate(0deg); }
+.dvd-announcement { position: absolute; bottom: 8%; left: 4%; width: 90%; font-family: 'VT323', monospace; font-size: 22px; color: #888; letter-spacing: 1px; }
 .dvd-title-wrap { position: absolute; top: 12%; left: 6%; max-width: 55%; }
 .dvd-title { font-family: 'Nosifer', 'VT323', cursive; line-height: 0.95; font-size: 76px; color: #b30000; text-align: left; text-shadow: 0 0 18px rgba(179,0,0,0.7), 4px 4px 0 #000, -2px -2px 0 #000; letter-spacing: 1px; }
 .dvd-sub { font-family: 'VT323', monospace; font-size: 20px; color: #999; letter-spacing: 4px; margin-top: 14px; }
 .dvd-menu-list { position: absolute; right: 9%; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: flex-end; gap: 26px; }
 .dvd-item { font-family: 'VT323', monospace; font-size: 40px; color: #eee; text-transform: uppercase; cursor: pointer; position: relative; padding: 4px 46px 4px 10px; text-shadow: 2px 2px 0 #000; transition: color 0.15s, transform 0.15s; }
 .dvd-item:hover, .dvd-item.dvd-active { color: #ffcc00; transform: translateX(-8px); }
+.dvd-item.disabled { color: #555; cursor: default; pointer-events: none; }
 #dvdHand { position: absolute; width: 46px; height: 46px; pointer-events: none; transition: top 0.18s ease; filter: drop-shadow(2px 2px 0 #000); }
 .dvd-corner-frame { position: absolute; inset: 18px; border: none; pointer-events: none; }
 .dvd-corner-frame span { position: absolute; width: 26px; height: 26px; }
 .dvd-corner-frame .tl { top:0; left:0; border-top:2px solid #661111; border-left:2px solid #661111; }
+#adminCornerBtn { pointer-events: auto; cursor: pointer; }
 .dvd-corner-frame .tr { top:0; right:0; border-top:2px solid #661111; border-right:2px solid #661111; }
 .dvd-corner-frame .bl { bottom:0; left:0; border-bottom:2px solid #661111; border-left:2px solid #661111; }
 .dvd-corner-frame .br { bottom:0; right:0; border-bottom:2px solid #661111; border-right:2px solid #661111; }
@@ -71,6 +73,9 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 .settings-row select { background: #1a0000; color: #fff; border: 3px solid #4a0000; font-family: inherit; font-size: 20px; padding: 4px 10px; }
 .settings-row button.toggle { background: #1a0000; color: #fff; border: 3px solid #4a0000; font-family: inherit; font-size: 20px; padding: 4px 16px; cursor: pointer; }
 .settings-row button.toggle.on { border-color: #ffcc00; color: #ffcc00; }
+.settings-row input[type="email"], .settings-row input[type="password"] { background: #1a0000; color: #fff; border: 3px solid #4a0000; font-family: inherit; font-size: 20px; padding: 6px 10px; width: 230px; }
+.admin-textarea { width: 520px; height: 120px; background: #1a0000; color: #fff; border: 3px solid #4a0000; font-family: 'VT323', monospace; font-size: 22px; padding: 10px; resize: none; }
+.err-text { color: #a30000; font-size: 20px; min-height: 24px; text-align: center; }
 </style>
 </head>
 <body>
@@ -87,8 +92,8 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 <div id="crosshair"></div>
 <div id="hitmarker">✕</div>
 <div id="mainMenu" class="menu-overlay">
-<div class="dvd-corner-frame"><span class="tl"></span><span class="tr"></span><span class="bl"></span><span class="br"></span></div>
-<div class="dvd-diagonal top"></div><div class="dvd-diagonal bottom"></div>
+<div class="dvd-corner-frame"><span class="tl"></span><span class="tr" id="adminCornerBtn"></span><span class="bl"></span><span class="br"></span></div>
+<div class="dvd-diagonal top"></div><div id="announcement" class="dvd-announcement"></div>
 <div class="dvd-title-wrap">
 <div class="dvd-title">deadhalls<br><span style="font-size:30px;"></span></div>
 <div class="dvd-sub"> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; </div>
@@ -96,9 +101,35 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 <div class="dvd-menu-list" id="dvdMenuList">
 <img id="dvdHand" src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='%23ffcc00' stroke='%23000' stroke-width='2'%3E%3Cpath d='M40 26c0-3-2-5-5-5s-5 2-5 5v2c-1-2-3-3-5-3-2 0-4 2-4 4 0 1 0 2 1 3l10 14c2 3 5 5 9 5h5c5 0 9-4 9-9V26c0-3-2-5-5-5s-5 2-5 5z'/%3E%3C/g%3E%3C/svg%3E" style="top:0px; right:calc(100% + 4px);">
 <div class="dvd-item" data-action="start">Start</div>
+<div class="dvd-item disabled" data-action="multiplayer">Multiplayer</div>
 <div class="dvd-item" data-action="settings">Settings</div>
+<div class="dvd-item" data-action="account">Account</div>
 <div class="dvd-item" data-action="quit">Quit</div>
 </div>
+</div>
+<div id="accountMenu" class="menu-overlay">
+<div class="dvd-corner-frame"><span class="tl"></span><span class="tr"></span><span class="bl"></span><span class="br"></span></div>
+<h1 style="font-size:64px;">Account</h1>
+<div id="accountLoggedOut">
+<div class="settings-row"><label>Email</label><input type="email" id="acctEmail" autocomplete="username"></div>
+<div class="settings-row"><label>Password</label><input type="password" id="acctPassword" autocomplete="current-password"></div>
+<button class="btn" id="acctSignInBtn">sign in</button>
+<button class="btn" id="acctSignUpBtn">create account</button>
+</div>
+<div id="accountLoggedIn" style="display:none; text-align:center;">
+<p class="sub" id="acctStatus"></p>
+<button class="btn" id="acctSignOutBtn">sign out</button>
+</div>
+<p class="err-text" id="acctError"></p>
+<button class="btn" id="accountBackBtn">back</button>
+</div>
+<div id="adminMenu" class="menu-overlay">
+<div class="dvd-corner-frame"><span class="tl"></span><span class="tr"></span><span class="bl"></span><span class="br"></span></div>
+<h1 style="font-size:56px;">Announcement</h1>
+<textarea id="adminAnnouncementInput" class="admin-textarea" maxlength="200"></textarea>
+<button class="btn" id="adminSaveBtn">save</button>
+<button class="btn" id="adminBackBtn">back</button>
+<p class="err-text" id="adminStatus"></p>
 </div>
 <div id="settingsMenu" class="menu-overlay">
 <div class="dvd-corner-frame"><span class="tl"></span><span class="tr"></span><span class="bl"></span><span class="br"></span></div>
@@ -119,6 +150,9 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 <button class="btn" id="restartBtn">retry</button>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-database-compat.js"></script>
 <script>
 let actx = null;
 function ensureAudio() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); }
@@ -676,6 +710,7 @@ it.classList.add('dvd-active'); positionHandAt(it);
 it.addEventListener('click', () => {
 const action = it.dataset.action; if (action === 'start') enterGame();
 else if (action === 'settings') { document.getElementById('mainMenu').style.display = 'none'; document.getElementById('settingsMenu').style.display = 'flex'; }
+else if (action === 'account') { document.getElementById('mainMenu').style.display = 'none'; document.getElementById('accountMenu').style.display = 'flex'; }
 else if (action === 'quit') handleQuit();
 });
 });
@@ -1033,6 +1068,51 @@ if (p.life >= p.maxLife || p.mesh.position.y <= 0) { scene.remove(p.mesh); p.mes
 renderer.render(scene, camera);
 }
 animate();
+</script>
+<script>
+const firebaseConfig = { apiKey: "AIzaSyATIwEggirk9BmqdbHVLDLkMENQ6McIPCo", authDomain: "untitledzombiegame-af10f.firebaseapp.com", databaseURL: "https://untitledzombiegame-af10f-default-rtdb.firebaseio.com", projectId: "untitledzombiegame-af10f", storageBucket: "untitledzombiegame-af10f.firebasestorage.app", messagingSenderId: "815973880121", appId: "1:815973880121:web:30484e94c8042b551b18e8", measurementId: "G-4GN3G2K4VY" };
+firebase.initializeApp(firebaseConfig);
+const fbAuth = firebase.auth();
+const fbDb = firebase.database();
+const ADMIN_EMAIL = "CHANGE_ME@example.com";
+fbDb.ref('announcement').on('value', snap => { document.getElementById('announcement').textContent = snap.val() || ''; });
+function showAcctError(msg) { document.getElementById('acctError').textContent = msg || ''; }
+fbAuth.onAuthStateChanged(user => {
+document.getElementById('accountLoggedOut').style.display = user ? 'none' : 'block';
+document.getElementById('accountLoggedIn').style.display = user ? 'block' : 'none';
+if (user) document.getElementById('acctStatus').textContent = 'Signed in as ' + user.email;
+});
+document.getElementById('acctSignInBtn').addEventListener('click', () => {
+showAcctError('');
+const email = document.getElementById('acctEmail').value.trim();
+const pass = document.getElementById('acctPassword').value;
+fbAuth.signInWithEmailAndPassword(email, pass).catch(err => showAcctError(err.message));
+});
+document.getElementById('acctSignUpBtn').addEventListener('click', () => {
+showAcctError('');
+const email = document.getElementById('acctEmail').value.trim();
+const pass = document.getElementById('acctPassword').value;
+fbAuth.createUserWithEmailAndPassword(email, pass).catch(err => showAcctError(err.message));
+});
+document.getElementById('acctSignOutBtn').addEventListener('click', () => fbAuth.signOut());
+document.getElementById('accountBackBtn').addEventListener('click', () => {
+document.getElementById('accountMenu').style.display = 'none'; document.getElementById('mainMenu').style.display = 'flex';
+});
+document.getElementById('adminCornerBtn').addEventListener('click', () => {
+const user = fbAuth.currentUser;
+if (!user || !user.email || user.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) return;
+document.getElementById('adminAnnouncementInput').value = document.getElementById('announcement').textContent || '';
+document.getElementById('adminStatus').textContent = '';
+document.getElementById('mainMenu').style.display = 'none'; document.getElementById('adminMenu').style.display = 'flex';
+});
+document.getElementById('adminBackBtn').addEventListener('click', () => {
+document.getElementById('adminMenu').style.display = 'none'; document.getElementById('mainMenu').style.display = 'flex';
+});
+document.getElementById('adminSaveBtn').addEventListener('click', () => {
+const text = document.getElementById('adminAnnouncementInput').value;
+fbDb.ref('announcement').set(text).then(() => { document.getElementById('adminStatus').textContent = 'Saved.'; })
+.catch(err => { document.getElementById('adminStatus').textContent = err.message; });
+});
 </script>
 </body>
 </html>
