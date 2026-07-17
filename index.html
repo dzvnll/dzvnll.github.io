@@ -109,6 +109,7 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 <div class="dvd-item" data-action="account">Account</div>
 <div class="dvd-item" data-action="quit">Quit</div>
 </div>
+</div>
 <script>
 (function(){
 var MENU_BACKGROUNDS = [
@@ -170,8 +171,8 @@ document.addEventListener('keydown', startMenuMusicOnce);
 <div class="dvd-corner-frame"><span class="tl"></span><span class="tr"></span><span class="bl"></span><span class="br"></span></div>
 <h1 style="font-size:64px;">Account</h1>
 <div id="accountLoggedOut">
-<div class="settings-row"><label>Username</label><input type="text" id="acctUsername" autocomplete="username" maxlength="20"></div>
-<div class="settings-row"><label>Password</label><input type="password" id="acctPassword" autocomplete="current-password"></div>
+<div class="settings-row"><label for="acctUsername">Username</label><input type="text" id="acctUsername" autocomplete="username" maxlength="20"></div>
+<div class="settings-row"><label for="acctPassword">Password</label><input type="password" id="acctPassword" autocomplete="current-password"></div>
 <button class="btn" id="acctSignInBtn">sign in</button>
 <button class="btn" id="acctSignUpBtn">create account</button>
 </div>
@@ -193,10 +194,10 @@ document.addEventListener('keydown', startMenuMusicOnce);
 <div id="settingsMenu" class="menu-overlay">
 <div class="dvd-corner-frame"><span class="tl"></span><span class="tr"></span><span class="bl"></span><span class="br"></span></div>
 <h1 style="font-size:64px;">Settings</h1>
-<div class="settings-row"><label>Mouse Sensitivity</label><input type="range" id="sensSlider" min="1" max="10" value="4"></div>
-<div class="settings-row"><label>Resolution</label><select id="resSelect"><option value="0.2">Low</option><option value="0.3" selected>Medium</option><option value="0.5">High</option><option value="1">Native</option></select></div>
-<div class="settings-row"><label>Shadows</label><button class="toggle on" id="shadowToggle">ON</button></div>
-<div class="settings-row"><label>Music Volume</label><div class="vol-wrap"><span class="vol-label" id="musicVolLabel">70%</span><input type="range" id="musicVolSlider" min="0" max="100" value="70"></div></div>
+<div class="settings-row"><label for="sensSlider">Mouse Sensitivity</label><input type="range" id="sensSlider" min="1" max="10" value="4"></div>
+<div class="settings-row"><label for="resSelect">Resolution</label><select id="resSelect"><option value="0.2">Low</option><option value="0.3" selected>Medium</option><option value="0.5">High</option><option value="1">Native</option></select></div>
+<div class="settings-row"><label for="shadowToggle">Shadows</label><button class="toggle on" id="shadowToggle">ON</button></div>
+<div class="settings-row"><label for="musicVolSlider">Music Volume</label><div class="vol-wrap"><span class="vol-label" id="musicVolLabel">70%</span><input type="range" id="musicVolSlider" min="0" max="100" value="70"></div></div>
 <button class="btn" id="settingsBackBtn" style="margin-top:30px;">back</button>
 </div>
 <div id="pauseMenu" class="menu-overlay">
