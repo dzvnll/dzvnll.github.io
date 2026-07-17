@@ -70,6 +70,9 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 .settings-row { display: flex; align-items: center; justify-content: space-between; width: 460px; margin: 16px 0; font-size: 26px; }
 .settings-row label { color: #ccc; }
 .settings-row input[type="range"] { width: 200px; accent-color: #a30000; }
+.vol-wrap { position: relative; width: 200px; height: 20px; }
+.vol-wrap input[type="range"] { position: absolute; top: 0; left: 0; }
+.vol-label { position: absolute; top: -22px; transform: translateX(-50%); font-size: 16px; color: #ffcc00; pointer-events: none; white-space: nowrap; text-shadow: 1px 1px 0 #000; }
 .settings-row select { background: #1a0000; color: #fff; border: 3px solid #4a0000; font-family: inherit; font-size: 20px; padding: 4px 10px; }
 .settings-row button.toggle { background: #1a0000; color: #fff; border: 3px solid #4a0000; font-family: inherit; font-size: 20px; padding: 4px 16px; cursor: pointer; }
 .settings-row button.toggle.on { border-color: #ffcc00; color: #ffcc00; }
@@ -94,11 +97,12 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 <div id="hitmarker">✕</div>
 <div id="mainMenu" class="menu-overlay">
 <div class="dvd-corner-frame"><span class="tl"></span><span class="tr" id="adminCornerBtn"></span><span class="bl"></span><span class="br"></span></div>
-<div class="dvd-corner-frame""></div><div id="announcement" class="dvd-announcement"></div>
+<div class="dvd-diagonal top"></div><div id="announcement" class="dvd-announcement"></div>
 <div class="dvd-title-wrap">
 <div class="dvd-title">deadhaus<br><span style="font-size:30px;"></span></div>
 <div class="dvd-sub"> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; </div>
 </div>
+<div class="dvd-menu-list" id="dvdMenuList">
 <div class="dvd-menu-list" id="dvdMenuList">
 <img id="dvdHand" src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='%23ffcc00' stroke='%23000' stroke-width='2'%3E%3Cpath d='M40 26c0-3-2-5-5-5s-5 2-5 5v2c-1-2-3-3-5-3-2 0-4 2-4 4 0 1 0 2 1 3l10 14c2 3 5 5 9 5h5c5 0 9-4 9-9V26c0-3-2-5-5-5s-5 2-5 5z'/%3E%3C/g%3E%3C/svg%3E" style="top:0px; right:calc(100% + 4px);">
 <div class="dvd-item" data-action="start">Start</div>
@@ -112,8 +116,8 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 (function(){
 var MENU_BACKGROUNDS = [
 "https://wallpapers.com/images/hd/zombie-background-r93zbafrbfsrcus1.jpg",
-"",
-"",
+"https://wallpaperaccess.com/full/2623653.jpg",
+"https://wallpaperaccess.com/full/2623662.jpg",
 "",
 "",
 ""
@@ -125,6 +129,45 @@ mm.style.backgroundSize = "cover, cover, cover";
 mm.style.backgroundPosition = "center, center, center";
 mm.style.backgroundRepeat = "no-repeat, no-repeat, no-repeat";
 })();
+</script>
+<script>
+var MUSIC_MENU = [
+"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3"
+];
+var MUSIC_GAME = [
+"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3"
+];
+var bgMusic = new Audio();
+var musicVolume = 70;
+bgMusic.volume = musicVolume / 100;
+var activeMusicPlaylist = null;
+var lastMusicTrack = null;
+function playRandomTrack(list) {
+if (!list || !list.length) return;
+var idx = Math.floor(Math.random() * list.length);
+if (list.length > 1) { while (list[idx] === lastMusicTrack) idx = Math.floor(Math.random() * list.length); }
+lastMusicTrack = list[idx];
+bgMusic.src = list[idx];
+bgMusic.play().catch(function(){});
+}
+function setMusicPlaylist(list) {
+if (activeMusicPlaylist === list) return;
+activeMusicPlaylist = list;
+playRandomTrack(list);
+}
+bgMusic.addEventListener('ended', function() { playRandomTrack(activeMusicPlaylist); });
+function startMenuMusicOnce() {
+setMusicPlaylist(MUSIC_MENU);
+document.removeEventListener('pointerdown', startMenuMusicOnce);
+document.removeEventListener('keydown', startMenuMusicOnce);
+}
+document.addEventListener('pointerdown', startMenuMusicOnce);
+document.addEventListener('keydown', startMenuMusicOnce);
 </script>
 <div id="accountMenu" class="menu-overlay">
 <div class="dvd-corner-frame"><span class="tl"></span><span class="tr"></span><span class="bl"></span><span class="br"></span></div>
@@ -156,6 +199,7 @@ mm.style.backgroundRepeat = "no-repeat, no-repeat, no-repeat";
 <div class="settings-row"><label>Mouse Sensitivity</label><input type="range" id="sensSlider" min="1" max="10" value="4"></div>
 <div class="settings-row"><label>Resolution</label><select id="resSelect"><option value="0.2">Low</option><option value="0.3" selected>Medium</option><option value="0.5">High</option><option value="1">Native</option></select></div>
 <div class="settings-row"><label>Shadows</label><button class="toggle on" id="shadowToggle">ON</button></div>
+<div class="settings-row"><label>Music Volume</label><div class="vol-wrap"><span class="vol-label" id="musicVolLabel">70%</span><input type="range" id="musicVolSlider" min="0" max="100" value="70"></div></div>
 <button class="btn" id="settingsBackBtn" style="margin-top:30px;">back</button>
 </div>
 <div id="pauseMenu" class="menu-overlay">
@@ -337,6 +381,12 @@ ctx.fillStyle = 'rgba(0,0,0,0.25)';
 ctx.fillRect(0, size-10, size, 10);
 ctx.fillStyle = 'rgba(255,255,255,0.18)';
 ctx.fillRect(0, 4, size, 3);
+for (let i = 0; i < 10; i++) {
+const sx = Math.random()*size, sy = Math.random()*size, len = 4 + Math.random()*14, ang = Math.random()*Math.PI;
+ctx.strokeStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.22)';
+ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(sx, sy);
+ctx.lineTo(sx + Math.cos(ang)*len, sy + Math.sin(ang)*len); ctx.stroke();
+}
 } else if (type === 'chalkPistol' || type === 'chalkShotgun' || type === 'chalkAR' || type === 'chalkSMG' || type === 'chalkLMG' || type === 'chalkMagnum') {
 ctx.fillStyle = 'rgba(255,255,255,0)'; ctx.fillRect(0,0,size,size);
 ctx.fillStyle = 'rgba(255,255,255,0.88)';
@@ -401,7 +451,7 @@ const matWall = new THREE.MeshLambertMaterial({ map: makeTex('wall') });
 const matFloor = new THREE.MeshLambertMaterial({ map: makeTex('floor') });
 const matDirt = new THREE.MeshLambertMaterial({ map: makeTex('dirt') });
 const matSkin = new THREE.MeshLambertMaterial({ map: makeGoreTex('#ab8b74', { wounds: 0 }) });
-const matGunMetal = new THREE.MeshLambertMaterial({ map: makeTex('gunMetal') });
+const matGunMetal = new THREE.MeshPhongMaterial({ map: makeTex('gunMetal'), shininess: 55, specular: 0x555555 });
 const matGunWood = new THREE.MeshLambertMaterial({ map: makeTex('wood') });
 const matBarrier = new THREE.MeshLambertMaterial({ map: makeTex('barrier') });
 const matPlayerCloth = new THREE.MeshLambertMaterial({ map: makeGoreTex('#1e221f', { wounds: 0 }) });
@@ -595,7 +645,7 @@ mesh.position.set(wb.x, wb.y, wb.z);
 orientWallbuy(mesh, wb.side);
 scene.add(mesh);
 });
-scene.add(new THREE.AmbientLight(0x1a1a1c));
+scene.add(new THREE.AmbientLight(0x1a1a1c, 1.05));
 function addPointLight(color, intensity, dist, x, y, z, shadow) {
 const pl = new THREE.PointLight(color, intensity, dist); pl.position.set(x, y, z);
 if (shadow) { pl.castShadow = true; pl.shadow.mapSize.width = 128; pl.shadow.mapSize.height = 128; pl.shadow.bias = -0.005; }
@@ -718,18 +768,36 @@ const mFace = new THREE.MeshLambertMaterial({ map: makeGoreTex('#4f5247', { woun
 const mUniform = new THREE.MeshLambertMaterial({ map: makeGoreTex(uniformColors[Math.floor(Math.random()*uniformColors.length)], { wounds: 4 + Math.floor(Math.random()*4) }) });
 const mFlesh = new THREE.MeshLambertMaterial({ map: makeGoreTex('#4f5247', { wounds: 3, bone: Math.random() < 0.45 }) });
 const torso = makeOrganicLimb(0.28, 0.22, 0.75, mUniform, 0, true); torso.position.y = 1.0;
+const neck = makeOrganicLimb(0.09, 0.11, 0.14, mFace, -0.07); neck.position.y = 0.36; torso.add(neck);
 const headGeo = new THREE.SphereGeometry(0.2, 12, 12); headGeo.translate(0, 0.15, 0); mangleGeometry(headGeo, 0.045);
-const head = new THREE.Mesh(headGeo, mFace); head.position.y = 0.38; head.castShadow = true; torso.add(head);
-const aL = makeOrganicLimb(0.08, 0.06, 0.7, mFlesh, -0.35); aL.position.set(-0.35, 0.25, 0); torso.add(aL);
-const aR = makeOrganicLimb(0.08, 0.06, 0.7, mFlesh, -0.35); aR.position.set(0.35, 0.25, 0); torso.add(aR);
-const lL = makeOrganicLimb(0.12, 0.09, 0.8, mUniform, -0.4); lL.position.set(-0.15, 0.8, 0); zGroup.add(lL);
-const lR = makeOrganicLimb(0.12, 0.09, 0.8, mUniform, -0.4); lR.position.set(0.15, 0.8, 0); zGroup.add(lR);
+const head = new THREE.Mesh(headGeo, mFace); head.position.y = 0.46; head.castShadow = true; torso.add(head);
+const jawGeo = new THREE.BoxGeometry(0.12, 0.08, 0.11); mangleGeometry(jawGeo, 0.02);
+const jaw = new THREE.Mesh(jawGeo, mFace); jaw.position.set(0, 0.34, 0.09); jaw.rotation.x = 0.5 + Math.random()*0.3; jaw.castShadow = true; torso.add(jaw);
+function makeLimb(upperLen, lowerLen, upperR, lowerR, endR, mat, bend) {
+const g = new THREE.Group();
+const upper = makeOrganicLimb(upperR, upperR*0.8, upperLen, mat, -upperLen/2); g.add(upper);
+const lower = makeOrganicLimb(upperR*0.75, lowerR, lowerLen, mat, -lowerLen/2);
+lower.position.y = -upperLen; lower.rotation.x = bend; upper.add(lower);
+const endGeo = new THREE.SphereGeometry(endR, 6, 6); mangleGeometry(endGeo, 0.02);
+const end = new THREE.Mesh(endGeo, mat); end.position.y = -lowerLen; end.castShadow = true; lower.add(end);
+return { group: g, meshes: [upper, lower, end] };
+}
+const armL = makeLimb(0.34, 0.34, 0.075, 0.06, 0.07, mFlesh, 0.25 + Math.random()*0.3);
+armL.group.position.set(-0.35, 0.25, 0); torso.add(armL.group);
+const armR = makeLimb(0.34, 0.34, 0.075, 0.06, 0.07, mFlesh, 0.25 + Math.random()*0.3);
+armR.group.position.set(0.35, 0.25, 0); torso.add(armR.group);
+const legL = makeLimb(0.42, 0.4, 0.12, 0.09, 0.1, mUniform, 0.1 + Math.random()*0.25);
+legL.group.position.set(-0.15, 0.8, 0); zGroup.add(legL.group);
+const legR = makeLimb(0.42, 0.4, 0.12, 0.09, 0.1, mUniform, 0.1 + Math.random()*0.25);
+legR.group.position.set(0.15, 0.8, 0); zGroup.add(legR.group);
 zGroup.add(torso); scene.add(zGroup);
-const parts = [torso, head, aL, aR, lL, lR];
+const aL = armL.group, aR = armR.group, lL = legL.group, lR = legR.group;
+const animParts = [torso, head, aL, aR, lL, lR];
+const parts = [torso, head, neck, jaw, ...armL.meshes, ...armR.meshes, ...legL.meshes, ...legR.meshes];
 const baseHp = 80 + (currentRound * 18);
 const baseSpeed = 2.0;
 const data = { 
-mesh: zGroup, parts: parts, hp: baseHp * hpMult * varHp, 
+mesh: zGroup, parts: parts, animParts: animParts, hp: baseHp * hpMult * varHp, 
 isDead: false, speed: baseSpeed * spdMult * varSpd, 
 animTime: Math.random()*10, attackCd: 0, 
 dmg: Math.max(6, (9 + Math.random()*4)*scale * (1 + (currentRound-1)*0.08) * 0.75)
@@ -768,6 +836,7 @@ if (playerHP <= 0) { playerHP = 0; updateHpBar(); die(); }
 }
 function die() {
 currentGameState = STATES.DEAD; document.exitPointerLock();
+setMusicPlaylist(MUSIC_MENU);
 document.getElementById('hud').style.display = 'none'; document.getElementById('crosshair').style.display = 'none';
 document.getElementById('gameOverStats').innerText = `You made it to round ${currentRound} with ${pts} points`;
 document.getElementById('gameOverMenu').style.display = 'flex';
@@ -798,6 +867,7 @@ try { const p = document.body.requestPointerLock(); if (p && p.catch) p.catch(()
 }
 function enterGame() {
 ensureAudio();
+setMusicPlaylist(MUSIC_GAME);
 document.getElementById('mainMenu').style.display = 'none'; document.getElementById('settingsMenu').style.display = 'none';
 document.getElementById('pauseMenu').style.display = 'none'; document.getElementById('hud').style.display = 'block';
 document.getElementById('crosshair').style.display = equipped !== 0 ? 'block' : 'none';
@@ -852,6 +922,17 @@ document.getElementById('shadowToggle').addEventListener('click', e => {
 renderer.shadowMap.enabled = !renderer.shadowMap.enabled;
 e.target.classList.toggle('on', renderer.shadowMap.enabled); e.target.textContent = renderer.shadowMap.enabled ? 'ON' : 'OFF';
 });
+const musicVolSlider = document.getElementById('musicVolSlider'); const musicVolLabel = document.getElementById('musicVolLabel');
+function updateMusicVolLabel() {
+const pct = parseInt(musicVolSlider.value, 10);
+const trackWidth = musicVolSlider.offsetWidth; const thumbW = 16;
+const left = thumbW / 2 + (pct / 100) * (trackWidth - thumbW);
+musicVolLabel.style.left = left + 'px'; musicVolLabel.textContent = pct + '%';
+}
+musicVolSlider.addEventListener('input', () => {
+musicVolume = parseInt(musicVolSlider.value, 10); bgMusic.volume = musicVolume / 100; updateMusicVolLabel();
+});
+updateMusicVolLabel();
 document.getElementById('settingsBackBtn').addEventListener('click', () => {
 document.getElementById('settingsMenu').style.display = 'none'; document.getElementById('mainMenu').style.display = 'flex';
 });
@@ -861,6 +942,7 @@ document.getElementById('gameOverMenu').style.display = 'none'; resetGame(); ent
 });
 document.getElementById('leaveBtn').addEventListener('click', () => {
 currentGameState = STATES.MENU; document.getElementById('pauseMenu').style.display = 'none';
+setMusicPlaylist(MUSIC_MENU);
 document.getElementById('mainMenu').style.display = 'flex'; document.getElementById('hud').style.display = 'none';
 document.getElementById('crosshair').style.display = 'none'; resetGame();
 gameVisible = false; renderer.domElement.style.display = 'none';
@@ -1168,7 +1250,7 @@ if (placed) break;
 if (!placed) mesh.position.copy(candidates[0].pos);
 z.offMapTimer = 0; z.leashTimer = 0; z.stuckTimer = 0; z.stuckPos.copy(mesh.position);
 }
-const [torso, head, aL, aR, lL, lR] = z.parts; z.attackCd -= dt;
+const [torso, head, aL, aR, lL, lR] = z.animParts; z.attackCd -= dt;
 if (dist > 1.3) {
 mesh.lookAt(px, 0, pz);
 const sx = (dx/dist) * z.speed * dt; const sz = (dz/dist) * z.speed * dt;
