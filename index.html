@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>deadhalls</title>
+<title>deadhaus</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=VT323&family=Nosifer&display=swap');
 * { margin:0; padding:0; box-sizing:border-box; user-select: none; }
@@ -81,6 +81,7 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 <body>
 <div id="hud">
 <div class="hud-text" id="waveNotice">WAVE <span id="waveNoticeNum">1</span></div>
+<div class="hud-text" id="mysteryBoxNotice" style="top:45%; left:50%; transform:translate(-50%,-50%); font-size:40px; color:#ffcc00; text-align:center; opacity:0; transition:opacity 0.4s; text-shadow:3px 3px 0 #000;">MYSTERY BOX - <span id="mysteryBoxLoc"></span></div>
 <div class="hud-text" id="round">ROUND <span id="roundNumber">1</span></div>
 <div class="hud-text" id="points">250</div>
 <div class="hud-text" id="ammo"><span id="ammoCurrent">12</span> / <span id="ammoReserve" style="color:#888">40</span></div>
@@ -95,7 +96,7 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 <div class="dvd-corner-frame"><span class="tl"></span><span class="tr" id="adminCornerBtn"></span><span class="bl"></span><span class="br"></span></div>
 <div class="dvd-diagonal top"></div><div id="announcement" class="dvd-announcement"></div>
 <div class="dvd-title-wrap">
-<div class="dvd-title">deadhalls<br><span style="font-size:30px;"></span></div>
+<div class="dvd-title">deadhaus<br><span style="font-size:30px;"></span></div>
 <div class="dvd-sub"> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; </div>
 </div>
 <div class="dvd-menu-list" id="dvdMenuList">
@@ -188,6 +189,41 @@ const oscGain = actx.createGain(); oscGain.gain.setValueAtTime(prof.oscGain, t);
 oscGain.gain.exponentialRampToValueAtTime(0.01, t+0.09);
 osc.connect(oscGain); oscGain.connect(actx.destination);
 osc.start(t); osc.stop(t+0.12);
+const crackLen = 0.045;
+const crackBuf = actx.createBuffer(1, actx.sampleRate * crackLen, actx.sampleRate);
+const cd = crackBuf.getChannelData(0);
+for (let i = 0; i < cd.length; i++) cd[i] = (Math.random()*2-1) * Math.pow(1 - i/cd.length, 8);
+const crack = actx.createBufferSource(); crack.buffer = crackBuf;
+const crackFilt = actx.createBiquadFilter();
+crackFilt.type = 'highpass'; crackFilt.frequency.value = 2200 + Math.random()*600;
+const crackGain = actx.createGain();
+crackGain.gain.setValueAtTime(prof.gain * 0.9, t);
+crackGain.gain.exponentialRampToValueAtTime(0.01, t + crackLen);
+crack.connect(crackFilt); crackFilt.connect(crackGain); crackGain.connect(actx.destination);
+crack.start(t);
+}
+function playReload(id) {
+ensureAudio(); const t = actx.currentTime;
+const clackFreqs = { 1: [900, 600], 2: [500, 350, 700], 3: [700, 500], 4: [800, 550], 5: [450, 320, 600], 6: [650, 420] }[id] || [700, 500];
+clackFreqs.forEach((f, i) => {
+const start = t + i * 0.09;
+const osc = actx.createOscillator(); osc.type = 'square'; osc.frequency.value = f;
+const gain = actx.createGain(); gain.gain.setValueAtTime(0.18, start);
+gain.gain.exponentialRampToValueAtTime(0.001, start + 0.05);
+osc.connect(gain); gain.connect(actx.destination); osc.start(start); osc.stop(start + 0.06);
+});
+}
+let lastFootstep = 0;
+function playFootstep() {
+ensureAudio(); const t = actx.currentTime;
+const buf = actx.createBuffer(1, actx.sampleRate * 0.08, actx.sampleRate);
+const d = buf.getChannelData(0);
+for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/d.length, 3);
+const src = actx.createBufferSource(); src.buffer = buf;
+const filt = actx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 350 + Math.random()*150;
+const gain = actx.createGain(); gain.gain.setValueAtTime(0.12, t);
+gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+src.connect(filt); filt.connect(gain); gain.connect(actx.destination); src.start(t);
 }
 function playThud(freq) {
 ensureAudio();
@@ -212,8 +248,9 @@ for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * (1 - i/d.length)
 noise.buffer = buf;
 const filt = actx.createBiquadFilter();
 filt.type = 'bandpass';
-filt.frequency.setValueAtTime(isHeavy ? 130 : 330, t);
-filt.Q.value = 1.3;
+const growlBase = (isHeavy ? 130 : 330) * (0.85 + Math.random() * 0.3);
+filt.frequency.setValueAtTime(growlBase, t);
+filt.Q.value = 1.1 + Math.random() * 0.4;
 const gain = actx.createGain();
 gain.gain.setValueAtTime(0.8, t);
 gain.gain.linearRampToValueAtTime(0.0, t+0.8);
@@ -274,6 +311,14 @@ ctx.fillStyle = '#2d1b0f'; ctx.fillRect(0,0,size,size);
 } else if (type === 'barrier') {
 ctx.fillStyle = '#472d1a'; ctx.fillRect(0,0,size,size);
 ctx.fillStyle = '#311e11'; for (let i=0;i<size;i+=16) ctx.fillRect(i,0,4,size);
+} else if (type === 'gunMetal') {
+ctx.fillStyle = '#3a3d42'; ctx.fillRect(0,0,size,size);
+ctx.fillStyle = 'rgba(255,255,255,0.10)';
+for (let i = 0; i < size; i += 3) ctx.fillRect(0, i, size, 1);
+ctx.fillStyle = 'rgba(0,0,0,0.25)';
+ctx.fillRect(0, size-10, size, 10);
+ctx.fillStyle = 'rgba(255,255,255,0.18)';
+ctx.fillRect(0, 4, size, 3);
 } else if (type === 'chalkPistol' || type === 'chalkShotgun' || type === 'chalkAR' || type === 'chalkSMG' || type === 'chalkLMG' || type === 'chalkMagnum') {
 ctx.fillStyle = 'rgba(255,255,255,0)'; ctx.fillRect(0,0,size,size);
 ctx.fillStyle = 'rgba(255,255,255,0.88)';
@@ -354,7 +399,10 @@ const spawnPoints = [
 { pos: new THREE.Vector3(-13, 0, 5), requires: ['d1', 'd2'] },
 { pos: new THREE.Vector3(30, 0, 30), requires: ['d1', 'd2', 'd3'] },
 { pos: new THREE.Vector3(25, 0, 45), requires: ['d1', 'd2', 'd3'] },
-{ pos: new THREE.Vector3(-20, 0, 41), requires: ['d1', 'd2', 'd4'] }
+{ pos: new THREE.Vector3(-20, 0, 41), requires: ['d1', 'd2', 'd4'] },
+{ pos: new THREE.Vector3(10, 0, 4), requires: ['d5'] },
+{ pos: new THREE.Vector3(-20, 0, 53), requires: ['d1', 'd2', 'd4', 'd6'] },
+{ pos: new THREE.Vector3(52, 0, 41), requires: ['d1', 'd2', 'd3', 'd7'] }
 ];
 function getAvailableSpawnPoints() {
 const avail = spawnPoints.filter(sp => sp.requires.every(k => doorState[k].open));
@@ -379,9 +427,14 @@ c.position.set(x, 4.1, z); c.receiveShadow = true; scene.add(c);
 addFloor(0, 4, 10, 10, matFloor);
 addWall(0, -1.5, 10, 1);
 addWall(-5.5, 4, 1, 10);
-addWall(5.5, 4, 1, 10);
+addWall(5.5, 0.5, 1, 3);
+addWall(5.5, 7.5, 1, 3);
 addWall(-3.5, 9.5, 4, 1);
 addWall(3.5, 9.5, 4, 1);
+addFloor(10, 4, 10, 10, matFloor);
+addWall(10, -1.5, 8, 1);
+addWall(10, 9.5, 8, 1);
+addWall(14.5, 4, 1, 10);
 addFloor(0, 15, 4, 10, matFloor);
 addWall(-2.5, 15, 1, 10);
 addWall(2.5, 15, 1, 10);
@@ -390,7 +443,8 @@ addWall(-4.5, 19.5, 5, 1); addWall(4.5, 19.5, 5, 1);
 addWall(-6.5, 25, 1, 10); addWall(6.5, 25, 1, 10);
 addWall(-4, 30.5, 6, 1); addWall(4, 30.5, 6, 1);
 addFloor(0, 41, 20, 20, matDirt, false);
-addWall(-10.5, 41, 1, 22);
+addWall(-10.5, 34.5, 1, 9);
+addWall(-10.5, 47.5, 1, 9);
 addWall(10.5, 33.5, 1, 7);
 addWall(10.5, 48.5, 1, 7);
 addWall(0, 51.5, 22, 1);
@@ -404,23 +458,36 @@ addWall(-13, 1.5, 6, 1); addWall(-13, 10.5, 6, 1);
 addFloor(28.5, 41, 35, 30, matFloor, false);
 addWall(28.5, 25.5, 36, 1);
 addWall(28.5, 56.5, 36, 1);
-addWall(46.5, 41, 1, 32);
+addWall(46.5, 31.5, 1, 13);
+addWall(46.5, 50.5, 1, 13);
 addWall(22, 35, 4, 4); addWall(34, 46, 6, 4); addWall(40, 32, 3, 8); addWall(20, 48, 4, 4);
+addFloor(52, 41, 12, 20, matFloor, false);
+addWall(52, 30.5, 10, 1);
+addWall(52, 51.5, 10, 1);
+addWall(57.5, 41, 1, 20);
 addFloor(-20, 41, 12, 12, matFloor);
 addWall(-26.5, 41, 1, 12);
 addWall(-20, 34.5, 12, 1);
-addWall(-20, 47.5, 12, 1);
+addWall(-24, 47.5, 4, 1);
+addWall(-16, 47.5, 4, 1);
 addWall(-13.5, 37, 1, 6); addWall(-13.5, 45, 1, 6);
+addFloor(-20, 53, 11, 12, matDirt, false);
+addWall(-20, 58.5, 10, 1);
+addWall(-25.5, 53, 1, 10);
+addWall(-14.5, 53, 1, 10);
 const MAP_FLOORS = [
 { x: 0, z: 4, w: 10, d: 10 },
+{ x: 10, z: 4, w: 9, d: 10 },
 { x: 0, z: 15, w: 4, d: 10 },
 { x: 0, z: 25, w: 12, d: 10 },
 { x: 0, z: 41, w: 20, d: 20 },
 { x: 28.5, z: 41, w: 35, d: 30 },
+{ x: 52, z: 41, w: 12, d: 20 },
 { x: -13, z: 41, w: 6, d: 6 },
 { x: -13, z: 25, w: 4, d: 24 },
 { x: -13, z: 6, w: 6, d: 10 },
-{ x: -20, z: 41, w: 12, d: 12 }
+{ x: -20, z: 41, w: 12, d: 12 },
+{ x: -20, z: 53, w: 11, d: 12 }
 ];
 function isInsideMapFloor(x, z) {
 const M = 1.1;
@@ -445,7 +512,10 @@ const DOORS = [
 { key: 'd1', name: 'Hallway', x: 0, z: 9.5, geo: [3.2, 4, 0.5], collider: { minX: -1.7, maxX: 1.7, minZ: 9.25, maxZ: 9.75 }, cost: 500, requires: [] },
 { key: 'd2', name: 'Courtyard', x: 0, z: 30.5, geo: [2.4, 4, 0.5], collider: { minX: -1.2, maxX: 1.2, minZ: 30.25, maxZ: 30.75 }, cost: 800, requires: ['d1'] },
 { key: 'd3', name: 'Warehouse', x: 10.5, z: 41, geo: [0.5, 4, 8.4], collider: { minX: 10.25, maxX: 10.75, minZ: 36.8, maxZ: 45.2 }, cost: 1250, requires: ['d1', 'd2'] },
-{ key: 'd4', name: 'Greenhouse',x: -11, z: 41, geo: [4, 4, 0.5], collider: { minX: -13, maxX: -9, minZ: 40.75, maxZ: 41.25 }, cost: 750, requires: ['d1', 'd2'] }
+{ key: 'd4', name: 'Greenhouse', x: -10.5, z: 41, geo: [0.5, 4, 4], collider: { minX: -10.75, maxX: -10.25, minZ: 39, maxZ: 43 }, cost: 750, requires: ['d1', 'd2'] },
+{ key: 'd5', name: 'Storage', x: 5.5, z: 4, geo: [0.5, 4, 4], collider: { minX: 5.25, maxX: 5.75, minZ: 2, maxZ: 6 }, cost: 600, requires: [] },
+{ key: 'd6', name: 'Bunker', x: -20, z: 47.5, geo: [4, 4, 0.5], collider: { minX: -22, maxX: -18, minZ: 47.25, maxZ: 47.75 }, cost: 1000, requires: ['d1', 'd2', 'd4'] },
+{ key: 'd7', name: 'Vault', x: 46.5, z: 41, geo: [0.5, 4, 6], collider: { minX: 46.25, maxX: 46.75, minZ: 38, maxZ: 44 }, cost: 1400, requires: ['d1', 'd2', 'd3'] }
 ];
 const doorState = {};
 DOORS.forEach(d => {
@@ -492,7 +562,13 @@ const wallbuys = [
 { x: 28, y: 1.6, z: 25.5, id: 3, cost: 1100, ammoCost: 550, name: "Assault Rifle", type: "chalkAR", side: 'xneg' },
 { x: 6.45, y: 1.6, z: 25, id: 4, cost: 800, ammoCost: 350, name: "SMG", type: "chalkSMG", side: 'xneg' },
 { x: 28.5, y: 1.6, z: 56.45, id: 5, cost: 1500, ammoCost: 700, name: "LMG", type: "chalkLMG", side: 'zneg' },
-{ x: -20, y: 1.6, z: 47.45, id: 6, cost: 950, ammoCost: 300, name: "Magnum", type: "chalkMagnum", side: 'zneg' }
+{ x: -20, y: 1.6, z: 47.45, id: 6, cost: 950, ammoCost: 300, name: "Magnum", type: "chalkMagnum", side: 'zneg' },
+{ x: 14.05, y: 1.6, z: 4, id: 4, cost: 900, ammoCost: 350, name: "SMG", type: "chalkSMG", side: 'xneg' },
+{ x: 10, y: 1.6, z: 8.95, id: 6, cost: 1000, ammoCost: 300, name: "Magnum", type: "chalkMagnum", side: 'zneg' },
+{ x: -14.95, y: 1.6, z: 49.5, id: 5, cost: 1600, ammoCost: 700, name: "LMG", type: "chalkLMG", side: 'xneg' },
+{ x: -20, y: 1.6, z: 58, id: 3, cost: 1300, ammoCost: 550, name: "Assault Rifle", type: "chalkAR", side: 'zneg' },
+{ x: 56.95, y: 1.6, z: 36, id: 6, cost: 1100, ammoCost: 300, name: "Magnum", type: "chalkMagnum", side: 'xneg' },
+{ x: 52, y: 1.6, z: 50.45, id: 4, cost: 950, ammoCost: 350, name: "SMG", type: "chalkSMG", side: 'zneg' }
 ];
 wallbuys.forEach(wb => {
 const mat = new THREE.MeshBasicMaterial({ map: makeTex(wb.type), transparent: true, side: THREE.DoubleSide, depthTest: false });
@@ -550,9 +626,23 @@ const magBody = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.09, 0.14), matGunMe
 const magCylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.06, 10), matGunMetal); magCylinder.rotation.z = Math.PI/2; magCylinder.position.set(0.22, -0.22, -0.24); vmMagnum.add(magCylinder);
 const magBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.4), matGunMetal); magBarrel.position.set(0.22, -0.22, -0.55); vmMagnum.add(magBarrel);
 const magGrip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.13, 0.06), matGunWood); magGrip.position.set(0.22, -0.3, -0.14); magGrip.rotation.x = 0.25; vmMagnum.add(magGrip);
+vmPistol.position.set(0.08, 0, 0);
+vmShotgun.position.set(0.05, 0, 0);
+vmAR.position.set(0.05, 0, 0);
+vmSMG.position.set(0.05, 0, 0);
+vmLMG.position.set(0.04, 0, 0);
+vmMagnum.position.set(0.08, 0, 0);
+const MUZZLE_OFFSETS = {
+1: { x: 0.30, y: -0.21, z: -0.56 },
+2: { x: 0.30, y: -0.22, z: -1.1 },
+3: { x: 0.30, y: -0.22, z: -1.05 },
+4: { x: 0.30, y: -0.21, z: -0.7 },
+5: { x: 0.30, y: -0.21, z: -1.175 },
+6: { x: 0.30, y: -0.22, z: -0.75 }
+};
 const flash = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6), new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, side: THREE.DoubleSide }));
-flash.position.set(0.25, -0.22, -1.2); flash.visible = false; viewmodel.add(flash);
-const muzzleLight = new THREE.PointLight(0xffaa33, 0, 6); muzzleLight.position.set(0.25, -0.22, -1.1); viewmodel.add(muzzleLight);
+flash.position.set(0.30, -0.22, -0.56); flash.visible = false; viewmodel.add(flash);
+const muzzleLight = new THREE.PointLight(0xffaa33, 0, 6); muzzleLight.position.set(0.30, -0.22, -0.56); viewmodel.add(muzzleLight);
 viewmodel.add(vmHands); viewmodel.add(vmPistol); viewmodel.add(vmShotgun); viewmodel.add(vmAR);
 viewmodel.add(vmSMG); viewmodel.add(vmLMG); viewmodel.add(vmMagnum);
 camera.add(viewmodel); scene.add(camera);
@@ -631,10 +721,20 @@ parts.forEach(p => { p.userData.zData = data; targets.push(p); });
 if (Math.random() < 0.5) playGrowl(isHeavy);
 }
 let currentRound = 1; let zombiesAlive = 0; let zombiesToSpawn = 0; let waveSpawnTimer = 0;
+const MYSTERY_BOX_LOCATIONS = ['Spawn Room', 'Hallway', 'Courtyard', 'Warehouse', 'Greenhouse', 'Storage', 'Bunker', 'Vault'];
+function maybeShowMysteryBox() {
+if (currentRound % 5 !== 0) return;
+const loc = MYSTERY_BOX_LOCATIONS[Math.floor(Math.random() * MYSTERY_BOX_LOCATIONS.length)];
+document.getElementById('mysteryBoxLoc').innerText = loc.toUpperCase();
+const box = document.getElementById('mysteryBoxNotice');
+box.style.opacity = 1; playChime();
+setTimeout(() => box.style.opacity = 0, 3000);
+}
 function startWave() {
 document.getElementById('roundNumber').innerText = currentRound;
 const notice = document.getElementById('waveNotice'); document.getElementById('waveNoticeNum').innerText = currentRound;
 notice.style.opacity = 1; setTimeout(() => notice.style.opacity = 0, 3000);
+maybeShowMysteryBox();
 zombiesToSpawn = Math.floor(5 + Math.pow(currentRound, 1.15) * 1.8); 
 zombiesAlive = zombiesToSpawn;
 }
@@ -825,6 +925,7 @@ document.getElementById('ammoReserve').innerText = guns[equipped].res;
 function initiateReload() {
 if (isReloading || guns[equipped].ammo === guns[equipped].max || guns[equipped].res === 0) return;
 isReloading = true;
+playReload(equipped);
 if (equipped === 1) { pSlide.position.z += 0.05; setTimeout(() => pSlide.position.z -= 0.05, 250); }
 else if (equipped === 2) { pump.position.z -= 0.1; setTimeout(() => pump.position.z += 0.1, 300); }
 else if (equipped === 3) { arMag.position.y -= 0.2; setTimeout(() => arMag.position.y += 0.2, 500); }
@@ -866,6 +967,8 @@ guns[equipped].ammo--; updateAmmoUI();
 playShot(guns[equipped].sound); pitch += isAiming ? guns[equipped].recoil * 0.5 : guns[equipped].recoil;
 viewmodel.position.z += isAiming ? 0.08 : 0.18;
 setTimeout(() => { viewmodel.position.z -= isAiming ? 0.08 : 0.18; }, 100);
+const mz = MUZZLE_OFFSETS[equipped] || MUZZLE_OFFSETS[1];
+flash.position.set(mz.x, mz.y, mz.z); muzzleLight.position.set(mz.x, mz.y, mz.z);
 flash.visible = true; flash.rotation.z = Math.random() * Math.PI;
 setTimeout(() => flash.visible = false, 50); muzzleLight.intensity = 5;
 setTimeout(() => muzzleLight.intensity = 0, 60);
@@ -963,6 +1066,10 @@ safeNotice.style.opacity = 0;
 }
 sway += dt; const bob = performance.now() * 0.012;
 const isMoving = len > 0;
+if (isMoving && isGrounded) {
+const stepInterval = keys['ShiftLeft'] ? 260 : 340;
+if (performance.now() - lastFootstep > stepInterval) { playFootstep(); lastFootstep = performance.now(); }
+}
 if (equipped !== 0) {
 const aimOffset = isAiming ? -0.12 : 0;
 viewmodel.position.x = THREE.MathUtils.lerp(viewmodel.position.x, aimOffset * 0.6, 0.1);
