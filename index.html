@@ -73,7 +73,7 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 .settings-row select { background: #1a0000; color: #fff; border: 3px solid #4a0000; font-family: inherit; font-size: 20px; padding: 4px 10px; }
 .settings-row button.toggle { background: #1a0000; color: #fff; border: 3px solid #4a0000; font-family: inherit; font-size: 20px; padding: 4px 16px; cursor: pointer; }
 .settings-row button.toggle.on { border-color: #ffcc00; color: #ffcc00; }
-.settings-row input[type="email"], .settings-row input[type="password"] { background: #1a0000; color: #fff; border: 3px solid #4a0000; font-family: inherit; font-size: 20px; padding: 6px 10px; width: 230px; }
+.settings-row input[type="text"], .settings-row input[type="password"] { background: #1a0000; color: #fff; border: 3px solid #4a0000; font-family: inherit; font-size: 20px; padding: 6px 10px; width: 230px; }
 .admin-textarea { width: 520px; height: 120px; background: #1a0000; color: #fff; border: 3px solid #4a0000; font-family: 'VT323', monospace; font-size: 22px; padding: 10px; resize: none; }
 .err-text { color: #a30000; font-size: 20px; min-height: 24px; text-align: center; }
 </style>
@@ -111,7 +111,7 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 <div class="dvd-corner-frame"><span class="tl"></span><span class="tr"></span><span class="bl"></span><span class="br"></span></div>
 <h1 style="font-size:64px;">Account</h1>
 <div id="accountLoggedOut">
-<div class="settings-row"><label>Email</label><input type="email" id="acctEmail" autocomplete="username"></div>
+<div class="settings-row"><label>Username</label><input type="text" id="acctUsername" autocomplete="username" maxlength="20"></div>
 <div class="settings-row"><label>Password</label><input type="password" id="acctPassword" autocomplete="current-password"></div>
 <button class="btn" id="acctSignInBtn">sign in</button>
 <button class="btn" id="acctSignUpBtn">create account</button>
@@ -151,7 +151,6 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-database-compat.js"></script>
 <script>
 let actx = null;
@@ -243,6 +242,8 @@ const renderer = new THREE.WebGLRenderer({ antialias: false });
 renderer.setPixelRatio(1); renderer.outputEncoding = THREE.LinearEncoding;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.BasicShadowMap;
 document.body.appendChild(renderer.domElement);
+renderer.domElement.style.display = 'none';
+let gameVisible = false;
 function resize() {
 renderer.setSize(window.innerWidth * RES_SCALE, window.innerHeight * RES_SCALE, false);
 camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
@@ -683,6 +684,7 @@ document.getElementById('mainMenu').style.display = 'none'; document.getElementB
 document.getElementById('pauseMenu').style.display = 'none'; document.getElementById('hud').style.display = 'block';
 document.getElementById('crosshair').style.display = equipped !== 0 ? 'block' : 'none';
 currentGameState = STATES.PLAYING;
+gameVisible = true; renderer.domElement.style.display = 'block';
 zombieAttacksDisabledUntil = performance.now() + ZOMBIE_ATTACK_GRACE_MS;
 if (zombiesAlive === 0 && currentRound === 1 && zombies.length === 0 && zombiesToSpawn === 0) startWave();
 tryRequestPointerLock();
@@ -743,6 +745,7 @@ document.getElementById('leaveBtn').addEventListener('click', () => {
 currentGameState = STATES.MENU; document.getElementById('pauseMenu').style.display = 'none';
 document.getElementById('mainMenu').style.display = 'flex'; document.getElementById('hud').style.display = 'none';
 document.getElementById('crosshair').style.display = 'none'; resetGame();
+gameVisible = false; renderer.domElement.style.display = 'none';
 });
 let hasPointerLock = false;
 document.addEventListener('pointerlockchange', () => {
@@ -1065,42 +1068,88 @@ p.mesh.material.opacity = Math.max(0, 1 - p.life/p.maxLife);
 if (p.life >= p.maxLife || p.mesh.position.y <= 0) { scene.remove(p.mesh); p.mesh.material.dispose(); bloodParticles.splice(i, 1); }
 }
 }
-renderer.render(scene, camera);
+if (gameVisible) renderer.render(scene, camera);
 }
 animate();
 </script>
 <script>
 const firebaseConfig = { apiKey: "AIzaSyATIwEggirk9BmqdbHVLDLkMENQ6McIPCo", authDomain: "untitledzombiegame-af10f.firebaseapp.com", databaseURL: "https://untitledzombiegame-af10f-default-rtdb.firebaseio.com", projectId: "untitledzombiegame-af10f", storageBucket: "untitledzombiegame-af10f.firebasestorage.app", messagingSenderId: "815973880121", appId: "1:815973880121:web:30484e94c8042b551b18e8", measurementId: "G-4GN3G2K4VY" };
 firebase.initializeApp(firebaseConfig);
-const fbAuth = firebase.auth();
 const fbDb = firebase.database();
-const ADMIN_EMAIL = "CHANGE_ME@example.com";
+const ADMIN_USERNAME = "dzvnll";
+const SESSION_KEY = "deadhalls_session";
+function usernameToKey(name) { return name.trim().toLowerCase().replace(/[^a-z0-9_.]/g, ''); }
+async function hashPassword(pass, saltHex) {
+if (!window.crypto || !window.crypto.subtle) throw new Error('This needs to be served over HTTPS to sign in/up.');
+const enc = new TextEncoder();
+const data = enc.encode(saltHex + ':' + pass);
+const digest = await crypto.subtle.digest('SHA-256', data);
+return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function randomSaltHex() {
+const arr = crypto.getRandomValues(new Uint8Array(16));
+return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+let currentUser = null;
+function setSession(username) {
+currentUser = username;
+try {
+if (username) localStorage.setItem(SESSION_KEY, username);
+else localStorage.removeItem(SESSION_KEY);
+} catch (err) { /* storage unavailable, session just won't persist across reloads */ }
+refreshAcctUI();
+}
+function refreshAcctUI() {
+document.getElementById('accountLoggedOut').style.display = currentUser ? 'none' : 'block';
+document.getElementById('accountLoggedIn').style.display = currentUser ? 'block' : 'none';
+if (currentUser) document.getElementById('acctStatus').textContent = 'Signed in as ' + currentUser;
+}
+(function restoreSession() {
+try {
+const saved = localStorage.getItem(SESSION_KEY);
+if (saved) { currentUser = saved; refreshAcctUI(); }
+} catch (err) { /* storage unavailable, just start logged out */ }
+})();
 fbDb.ref('announcement').on('value', snap => { document.getElementById('announcement').textContent = snap.val() || ''; });
 function showAcctError(msg) { document.getElementById('acctError').textContent = msg || ''; }
-fbAuth.onAuthStateChanged(user => {
-document.getElementById('accountLoggedOut').style.display = user ? 'none' : 'block';
-document.getElementById('accountLoggedIn').style.display = user ? 'block' : 'none';
-if (user) document.getElementById('acctStatus').textContent = 'Signed in as ' + user.email;
-});
-document.getElementById('acctSignInBtn').addEventListener('click', () => {
+document.getElementById('acctSignInBtn').addEventListener('click', async () => {
 showAcctError('');
-const email = document.getElementById('acctEmail').value.trim();
+const username = document.getElementById('acctUsername').value;
 const pass = document.getElementById('acctPassword').value;
-fbAuth.signInWithEmailAndPassword(email, pass).catch(err => showAcctError(err.message));
+const key = usernameToKey(username);
+if (!key) { showAcctError('Enter a username.'); return; }
+if (!pass) { showAcctError('Enter a password.'); return; }
+try {
+const snap = await fbDb.ref('users/' + key).once('value');
+const rec = snap.val();
+if (!rec) { showAcctError('Incorrect username or password.'); return; }
+const hash = await hashPassword(pass, rec.salt);
+if (hash !== rec.hash) { showAcctError('Incorrect username or password.'); return; }
+setSession(rec.username || key);
+} catch (err) { showAcctError(err.message); }
 });
-document.getElementById('acctSignUpBtn').addEventListener('click', () => {
+document.getElementById('acctSignUpBtn').addEventListener('click', async () => {
 showAcctError('');
-const email = document.getElementById('acctEmail').value.trim();
+const username = document.getElementById('acctUsername').value;
 const pass = document.getElementById('acctPassword').value;
-fbAuth.createUserWithEmailAndPassword(email, pass).catch(err => showAcctError(err.message));
+const key = usernameToKey(username);
+if (!key) { showAcctError('Enter a username.'); return; }
+if (pass.length < 6) { showAcctError('Password must be at least 6 characters.'); return; }
+try {
+const snap = await fbDb.ref('users/' + key).once('value');
+if (snap.exists()) { showAcctError('Username already taken.'); return; }
+const salt = randomSaltHex();
+const hash = await hashPassword(pass, salt);
+await fbDb.ref('users/' + key).set({ username: username.trim(), salt, hash });
+setSession(username.trim());
+} catch (err) { showAcctError(err.message); }
 });
-document.getElementById('acctSignOutBtn').addEventListener('click', () => fbAuth.signOut());
+document.getElementById('acctSignOutBtn').addEventListener('click', () => setSession(null));
 document.getElementById('accountBackBtn').addEventListener('click', () => {
 document.getElementById('accountMenu').style.display = 'none'; document.getElementById('mainMenu').style.display = 'flex';
 });
 document.getElementById('adminCornerBtn').addEventListener('click', () => {
-const user = fbAuth.currentUser;
-if (!user || !user.email || user.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) return;
+if (!currentUser || currentUser.toLowerCase() !== ADMIN_USERNAME.toLowerCase()) return;
 document.getElementById('adminAnnouncementInput').value = document.getElementById('announcement').textContent || '';
 document.getElementById('adminStatus').textContent = '';
 document.getElementById('mainMenu').style.display = 'none'; document.getElementById('adminMenu').style.display = 'flex';
