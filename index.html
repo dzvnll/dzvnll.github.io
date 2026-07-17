@@ -128,31 +128,40 @@
         let actx = null;
         function ensureAudio() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); }
         
+        const SHOT_PROFILES = {
+            pistol:  { len: 0.2,  lp: 7000, lpEnd: 0.25, gain: 0.45, oscF: 190, oscGain: 0.3 },
+            shotgun: { len: 0.4,  lp: 3500, lpEnd: 0.35, gain: 1.0,  oscF: 120, oscGain: 0.7 },
+            ar:      { len: 0.4,  lp: 5500, lpEnd: 0.25, gain: 0.75, oscF: 150, oscGain: 0.7 },
+            smg:     { len: 0.28, lp: 6200, lpEnd: 0.18, gain: 0.55, oscF: 210, oscGain: 0.45 },
+            lmg:     { len: 0.45, lp: 4600, lpEnd: 0.3,  gain: 0.9,  oscF: 110, oscGain: 0.75 },
+            magnum:  { len: 0.42, lp: 3200, lpEnd: 0.32, gain: 1.05, oscF: 95,  oscGain: 0.85 }
+        };
         function playShot(type = "shotgun") {
             ensureAudio();
             const t = actx.currentTime;
+            const prof = SHOT_PROFILES[type] || SHOT_PROFILES.ar;
             const noise = actx.createBufferSource();
-            const buf = actx.createBuffer(1, actx.sampleRate * (type === "pistol" ? 0.2 : 0.4), actx.sampleRate);
+            const buf = actx.createBuffer(1, actx.sampleRate * prof.len, actx.sampleRate);
             const d = buf.getChannelData(0);
             for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/d.length, 4);
             noise.buffer = buf;
             
             const filt = actx.createBiquadFilter();
             filt.type = 'lowpass';
-            filt.frequency.setValueAtTime(type === "shotgun" ? 3500 : (type === "pistol" ? 7000 : 5500), t);
-            filt.frequency.exponentialRampToValueAtTime(100, t + (type === "shotgun" ? 0.35 : 0.25));
+            filt.frequency.setValueAtTime(prof.lp, t);
+            filt.frequency.exponentialRampToValueAtTime(100, t + prof.lpEnd);
             
             const gain = actx.createGain();
-            gain.gain.setValueAtTime(type === "shotgun" ? 1.0 : (type === "pistol" ? 0.45 : 0.75), t);
-            gain.gain.exponentialRampToValueAtTime(0.01, t + (type === "shotgun" ? 0.35 : 0.25));
+            gain.gain.setValueAtTime(prof.gain, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + prof.lpEnd);
             
             noise.connect(filt); filt.connect(gain); gain.connect(actx.destination);
             noise.start(t);
 
             const osc = actx.createOscillator(); osc.type = 'sine';
-            osc.frequency.setValueAtTime(type === "shotgun" ? 120 : (type === "pistol" ? 190 : 150), t);
+            osc.frequency.setValueAtTime(prof.oscF, t);
             osc.frequency.exponentialRampToValueAtTime(30, t+0.09);
-            const oscGain = actx.createGain(); oscGain.gain.setValueAtTime(type === "pistol" ? 0.3 : 0.7, t);
+            const oscGain = actx.createGain(); oscGain.gain.setValueAtTime(prof.oscGain, t);
             oscGain.gain.exponentialRampToValueAtTime(0.01, t+0.09);
             osc.connect(oscGain); oscGain.connect(actx.destination);
             osc.start(t); osc.stop(t+0.12);
@@ -252,7 +261,7 @@
             } else if (type === 'barrier') {
                 ctx.fillStyle = '#472d1a'; ctx.fillRect(0,0,size,size);
                 ctx.fillStyle = '#311e11'; for (let i=0;i<size;i+=16) ctx.fillRect(i,0,4,size);
-            } else if (type === 'chalkPistol' || type === 'chalkShotgun' || type === 'chalkAR') {
+            } else if (type === 'chalkPistol' || type === 'chalkShotgun' || type === 'chalkAR' || type === 'chalkSMG' || type === 'chalkLMG' || type === 'chalkMagnum') {
                 ctx.fillStyle = 'rgba(255,255,255,0)'; ctx.fillRect(0,0,size,size);
                 ctx.fillStyle = 'rgba(255,255,255,0.88)';
                 if (type === 'chalkPistol') {
@@ -261,6 +270,12 @@
                     ctx.fillRect(4, 26, 56, 6); ctx.fillRect(42, 32, 14, 10);
                 } else if (type === 'chalkAR') {
                     ctx.fillRect(4, 24, 56, 8); ctx.fillRect(32, 32, 8, 18); ctx.fillRect(14, 32, 4, 14);
+                } else if (type === 'chalkSMG') {
+                    ctx.fillRect(8, 24, 40, 7); ctx.fillRect(20, 31, 6, 16); ctx.fillRect(44, 26, 10, 14); ctx.fillRect(6, 31, 4, 10);
+                } else if (type === 'chalkLMG') {
+                    ctx.fillRect(2, 26, 58, 8); ctx.fillRect(30, 34, 8, 18); ctx.fillRect(4, 34, 20, 6); ctx.fillRect(46, 22, 4, 8);
+                } else if (type === 'chalkMagnum') {
+                    ctx.fillRect(14, 22, 26, 9); ctx.fillRect(30, 31, 7, 17); ctx.fillRect(10, 25, 6, 6);
                 }
             }
             for (let i = 0; i < 600; i++) {
@@ -319,17 +334,27 @@
         const matPlayerCloth = new THREE.MeshLambertMaterial({ map: makeGoreTex('#1e221f', { wounds: 0 }) });
 
         const colliders = [];
+        // Each spawn point lists which doors must be open for it to be usable.
+        // This stops zombies spawning behind a locked door where they'd get stuck
+        // and never reach the player - which was the root cause of zombies
+        // appearing to randomly teleport or vanish near gated rooms.
         const spawnPoints = [
-            new THREE.Vector3(0, 0, 16),
-            new THREE.Vector3(-4, 0, 26),
-            new THREE.Vector3(4, 0, 28),
-            new THREE.Vector3(0, 0, 40),
-            new THREE.Vector3(-13, 0, 20),
-            new THREE.Vector3(-13, 0, 5),
-            new THREE.Vector3(30, 0, 30),
-            new THREE.Vector3(25, 0, 45),
-            new THREE.Vector3(-20, 0, 41)
+            { pos: new THREE.Vector3(3, 0, 2), requires: [] },
+            { pos: new THREE.Vector3(-3, 0, 6), requires: [] },
+            { pos: new THREE.Vector3(0, 0, 16), requires: ['d1'] },
+            { pos: new THREE.Vector3(-4, 0, 26), requires: ['d1'] },
+            { pos: new THREE.Vector3(4, 0, 28), requires: ['d1'] },
+            { pos: new THREE.Vector3(0, 0, 40), requires: ['d1', 'd2'] },
+            { pos: new THREE.Vector3(-13, 0, 20), requires: ['d1', 'd2'] },
+            { pos: new THREE.Vector3(-13, 0, 5), requires: ['d1', 'd2'] },
+            { pos: new THREE.Vector3(30, 0, 30), requires: ['d1', 'd2', 'd3'] },
+            { pos: new THREE.Vector3(25, 0, 45), requires: ['d1', 'd2', 'd3'] },
+            { pos: new THREE.Vector3(-20, 0, 41), requires: ['d1', 'd2', 'd4'] }
         ];
+        function getAvailableSpawnPoints() {
+            const avail = spawnPoints.filter(sp => sp.requires.every(k => doorState[k].open));
+            return avail.length ? avail : [spawnPoints[0]];
+        }
 
         function addWall(x, z, w, d, id) {
             const geo = new THREE.BoxGeometry(w, 4, d);
@@ -403,45 +428,86 @@
                 { x: -13, z: 6, w: 6, d: 10 },
                 { x: -20, z: 41, w: 12, d: 12 }
             ];
+            // Small buffer so the narrow doorway gaps between adjacent floor
+            // rectangles (where no floor mesh technically exists) don't get
+            // flagged as "off the map" - that false-positive was the main
+            // cause of zombies randomly teleporting near room thresholds.
+            const M = 1.1;
             for (let f of floors) {
-                if (x >= f.x - f.w/2 && x <= f.x + f.w/2 && z >= f.z - f.d/2 && z <= f.z + f.d/2) return true;
+                if (x >= f.x - f.w/2 - M && x <= f.x + f.w/2 + M && z >= f.z - f.d/2 - M && z <= f.z + f.d/2 + M) return true;
             }
             return false;
         }
 
-        let barrierOpen = false;
-        const barrierGeo = new THREE.BoxGeometry(4, 4, 0.5); const barrierMesh = new THREE.Mesh(barrierGeo, matBarrier);
-        barrierMesh.position.set(-11, 2, 41); barrierMesh.castShadow = true; barrierMesh.receiveShadow = true;
-        scene.add(barrierMesh); const barrierCollider = { minX: -13, maxX: -9, minZ: 40.75, maxZ: 41.25, id: 'barrier' };
-        colliders.push(barrierCollider); const BARRIER_COST = 750;
+        // ---- Buy doors ----
+        // Each door blocks a real wall opening until purchased with [E]. Positions/colliders
+        // are computed directly from the addWall() calls above so they sit flush in the gaps.
+        const DOORS = [
+            { key: 'd1', name: 'Hallway',   x: 0,     z: 9.5,  geo: [3.2, 4, 0.5], collider: { minX: -1.7,  maxX: 1.7,   minZ: 9.25,  maxZ: 9.75 },  cost: 500,  requires: [] },
+            { key: 'd2', name: 'Courtyard', x: 0,     z: 30.5, geo: [2.4, 4, 0.5], collider: { minX: -1.2,  maxX: 1.2,   minZ: 30.25, maxZ: 30.75 }, cost: 800,  requires: ['d1'] },
+            { key: 'd3', name: 'Warehouse', x: 10.5,  z: 41,   geo: [0.5, 4, 8.4], collider: { minX: 10.25, maxX: 10.75, minZ: 36.8,  maxZ: 45.2 },  cost: 1250, requires: ['d1', 'd2'] },
+            { key: 'd4', name: 'Greenhouse',x: -11,   z: 41,   geo: [4, 4, 0.5],   collider: { minX: -13,   maxX: -9,    minZ: 40.75, maxZ: 41.25 }, cost: 750,  requires: ['d1', 'd2'] }
+        ];
+        const doorState = {};
+        DOORS.forEach(d => {
+            const geo = new THREE.BoxGeometry(d.geo[0], d.geo[1], d.geo[2]);
+            const mesh = new THREE.Mesh(geo, matBarrier);
+            mesh.position.set(d.x, 2, d.z); mesh.castShadow = true; mesh.receiveShadow = true;
+            scene.add(mesh);
+            const collider = Object.assign({ id: 'door_' + d.key }, d.collider);
+            colliders.push(collider);
+            doorState[d.key] = { open: false, mesh, collider, def: d };
+        });
 
-        function tryOpenBarrier() {
-            if (barrierOpen || pts < BARRIER_COST) return;
-            pts -= BARRIER_COST; document.getElementById('points').innerText = pts;
-            barrierOpen = true; scene.remove(barrierMesh);
-            const idx = colliders.indexOf(barrierCollider); if (idx >= 0) colliders.splice(idx, 1);
+        function doorRequirementsMet(d) {
+            return d.requires.every(k => doorState[k].open);
+        }
+        function tryOpenDoor(state) {
+            const d = state.def;
+            if (state.open || pts < d.cost || !doorRequirementsMet(d)) return;
+            pts -= d.cost; document.getElementById('points').innerText = pts;
+            state.open = true; scene.remove(state.mesh);
+            const idx = colliders.indexOf(state.collider); if (idx >= 0) colliders.splice(idx, 1);
             playChime();
+        }
+        function getNearestDoor() {
+            let best = null, bestDist = 3;
+            for (let key in doorState) {
+                const state = doorState[key]; if (state.open) continue;
+                const dx = camera.position.x - state.def.x; const dz = camera.position.z - state.def.z;
+                const dist = Math.sqrt(dx*dx + dz*dz);
+                if (dist < bestDist) { bestDist = dist; best = state; }
+            }
+            return best;
+        }
+
+        // Small helper: mount a wallbuy plane flush against a wall, oriented so it
+        // faces into the room it's mounted in. side: 'zpos'|'zneg'|'xpos'|'xneg'
+        // describes which direction the room interior lies relative to the wall.
+        function orientWallbuy(mesh, side) {
+            if (side === 'zpos') { mesh.rotation.y = 0; mesh.position.z += 0.05; }
+            else if (side === 'zneg') { mesh.rotation.y = Math.PI; mesh.position.z -= 0.05; }
+            else if (side === 'xpos') { mesh.rotation.y = Math.PI / 2; mesh.position.x += 0.05; }
+            else if (side === 'xneg') { mesh.rotation.y = -Math.PI / 2; mesh.position.x -= 0.05; }
         }
 
         const wallbuys = [
-            { x: 0, y: 1.6, z: -1.4, id: 2, cost: 500, ammoCost: 250, name: "Shotgun", type: "chalkShotgun" },
-            { x: 46.4, y: 1.6, z: 41, id: 3, cost: 1200, ammoCost: 600, name: "Assault Rifle", type: "chalkAR" },
-            { x: -2.4, y: 1.6, z: 15, id: 1, cost: 0, ammoCost: 150, name: "Pistol Ammo", type: "chalkPistol" },
-            { x: -20.4, y: 1.6, z: 35, id: 2, cost: 650, ammoCost: 300, name: "Shotgun", type: "chalkShotgun" },
-            { x: 28, y: 1.6, z: 25.5, id: 3, cost: 1100, ammoCost: 550, name: "Assault Rifle", type: "chalkAR" }
+            { x: 0, y: 1.6, z: -1.4, id: 2, cost: 500, ammoCost: 250, name: "Shotgun", type: "chalkShotgun", side: 'zpos' },
+            { x: 46.4, y: 1.6, z: 41, id: 3, cost: 1200, ammoCost: 600, name: "Assault Rifle", type: "chalkAR", side: 'xneg' },
+            { x: -2.4, y: 1.6, z: 15, id: 1, cost: 0, ammoCost: 150, name: "Pistol Ammo", type: "chalkPistol", side: 'xpos' },
+            { x: -20.4, y: 1.6, z: 35, id: 2, cost: 650, ammoCost: 300, name: "Shotgun", type: "chalkShotgun", side: 'zpos' },
+            { x: 28, y: 1.6, z: 25.5, id: 3, cost: 1100, ammoCost: 550, name: "Assault Rifle", type: "chalkAR", side: 'xneg' },
+            // New guns, placed against verified wall openings in the newly-gated areas
+            { x: 6.45, y: 1.6, z: 25, id: 4, cost: 800, ammoCost: 350, name: "SMG", type: "chalkSMG", side: 'xneg' },
+            { x: 28.5, y: 1.6, z: 56.45, id: 5, cost: 1500, ammoCost: 700, name: "LMG", type: "chalkLMG", side: 'zneg' },
+            { x: -20, y: 1.6, z: 47.45, id: 6, cost: 950, ammoCost: 300, name: "Magnum", type: "chalkMagnum", side: 'zneg' }
         ];
 
         wallbuys.forEach(wb => {
             const mat = new THREE.MeshBasicMaterial({ map: makeTex(wb.type), transparent: true, side: THREE.DoubleSide, depthTest: false });
             const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.0), mat);
             mesh.position.set(wb.x, wb.y, wb.z);
-            if (wb.x === 0 || wb.x === -20.4) {
-                mesh.rotation.y = 0; mesh.position.z += 0.05;
-            } else if (Math.abs(wb.x - 46.4) < 1 || Math.abs(wb.x - 28) < 1) {
-                mesh.rotation.y = -Math.PI / 2; mesh.position.x -= 0.05;
-            } else if (wb.x === -2.4) {
-                mesh.rotation.y = Math.PI / 2; mesh.position.x += 0.05;
-            }
+            orientWallbuy(mesh, wb.side);
             scene.add(mesh);
         });
 
@@ -465,6 +531,9 @@
         const vmPistol = new THREE.Group();
         const vmShotgun = new THREE.Group();
         const vmAR = new THREE.Group();
+        const vmSMG = new THREE.Group();
+        const vmLMG = new THREE.Group();
+        const vmMagnum = new THREE.Group();
 
         const hForeR = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 0.52), matSkin); hForeR.position.set(0.32, -0.26, -0.18); vmHands.add(hForeR);
         const hRight = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.32), matSkin); hRight.position.set(0.32, -0.24, -0.42); vmHands.add(hRight);
@@ -483,11 +552,32 @@
         const arBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.5), matGunMetal); arBarrel.position.set(0.25, -0.22, -0.8); vmAR.add(arBarrel);
         const arStock = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, 0.28), matGunMetal); arStock.position.set(0.25, -0.25, 0.15); vmAR.add(arStock);
 
+        // SMG - compact body, folding stock, long mag
+        const smgBody = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.11, 0.42), matGunMetal); smgBody.position.set(0.25, -0.24, -0.2); vmSMG.add(smgBody);
+        const smgMag = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.24, 0.06), matGunMetal); smgMag.position.set(0.25, -0.4, -0.15); smgMag.rotation.x = -0.2; vmSMG.add(smgMag);
+        const smgBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, 0.3), matGunMetal); smgBarrel.position.set(0.25, -0.21, -0.55); vmSMG.add(smgBarrel);
+        const smgStock = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.08, 0.22), matGunMetal); smgStock.position.set(0.25, -0.24, 0.06); vmSMG.add(smgStock);
+
+        // LMG - heavy body, bipod, big drum mag
+        const lmgBody = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.75), matGunMetal); lmgBody.position.set(0.26, -0.24, -0.32); vmLMG.add(lmgBody);
+        const lmgDrum = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.06, 10), matGunMetal); lmgDrum.rotation.z = Math.PI/2; lmgDrum.position.set(0.26, -0.4, -0.22); vmLMG.add(lmgDrum);
+        const lmgBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.55), matGunMetal); lmgBarrel.position.set(0.26, -0.21, -0.9); vmLMG.add(lmgBarrel);
+        const lmgBipodL = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.18, 0.02), matGunMetal); lmgBipodL.position.set(0.19, -0.32, -0.75); lmgBipodL.rotation.z = 0.25; vmLMG.add(lmgBipodL);
+        const lmgBipodR = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.18, 0.02), matGunMetal); lmgBipodR.position.set(0.33, -0.32, -0.75); lmgBipodR.rotation.z = -0.25; vmLMG.add(lmgBipodR);
+        const lmgStock = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.3), matGunWood); lmgStock.position.set(0.26, -0.27, 0.15); vmLMG.add(lmgStock);
+
+        // Magnum - big revolver, long barrel
+        const magBody = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.09, 0.14), matGunMetal); magBody.position.set(0.22, -0.22, -0.3); vmMagnum.add(magBody);
+        const magCylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.06, 10), matGunMetal); magCylinder.rotation.z = Math.PI/2; magCylinder.position.set(0.22, -0.22, -0.24); vmMagnum.add(magCylinder);
+        const magBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.4), matGunMetal); magBarrel.position.set(0.22, -0.22, -0.55); vmMagnum.add(magBarrel);
+        const magGrip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.13, 0.06), matGunWood); magGrip.position.set(0.22, -0.3, -0.14); magGrip.rotation.x = 0.25; vmMagnum.add(magGrip);
+
         const flash = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6), new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, side: THREE.DoubleSide }));
         flash.position.set(0.25, -0.22, -1.2); flash.visible = false; viewmodel.add(flash);
 
         const muzzleLight = new THREE.PointLight(0xffaa33, 0, 6); muzzleLight.position.set(0.25, -0.22, -1.1); viewmodel.add(muzzleLight);
         viewmodel.add(vmHands); viewmodel.add(vmPistol); viewmodel.add(vmShotgun); viewmodel.add(vmAR);
+        viewmodel.add(vmSMG); viewmodel.add(vmLMG); viewmodel.add(vmMagnum);
         camera.add(viewmodel); scene.add(camera);
 
         const playerBody = new THREE.Group(); scene.add(playerBody);
@@ -605,12 +695,14 @@
             bloodParticles.forEach(p => scene.remove(p.mesh)); bloodParticles.length = 0;
             currentRound = 1; zombiesAlive = 0; zombiesToSpawn = 0; waveSpawnTimer = 0; pts = 500; playerHP = MAX_HP;
             
-            guns[1].ammo = guns[1].max; guns[1].res = guns[1].maxRes;
-            guns[2].unlocked = false; guns[2].ammo = guns[2].max; guns[2].res = guns[2].maxRes;
-            guns[3].unlocked = false; guns[3].ammo = guns[3].max; guns[3].res = guns[3].maxRes;
+            GUN_IDS.forEach(id => {
+                guns[id].ammo = guns[id].max; guns[id].res = guns[id].maxRes;
+                if (id !== 1) guns[id].unlocked = false;
+            });
             
-            if (barrierOpen) {
-                barrierOpen = false; scene.add(barrierMesh); colliders.push(barrierCollider);
+            for (let key in doorState) {
+                const state = doorState[key];
+                if (state.open) { state.open = false; scene.add(state.mesh); colliders.push(state.collider); }
             }
             
             switchWeapon(1);
@@ -714,6 +806,9 @@
                 if (e.code === 'Digit2') switchWeapon(1);
                 if (e.code === 'Digit3') switchWeapon(2);
                 if (e.code === 'Digit4') switchWeapon(3);
+                if (e.code === 'Digit5') switchWeapon(4);
+                if (e.code === 'Digit6') switchWeapon(5);
+                if (e.code === 'Digit7') switchWeapon(6);
                 if (e.code === 'KeyE') tryInteract();
             }
         });
@@ -746,19 +841,21 @@
         let pts = 500; let isReloading = false; let equipped = 1;
         const guns = {
             0: { id: 0, unlocked: true },
-            1: { id: 1, name: "Pistol", ammo: 12, res: 60, max: 12, maxRes: 120, dmg: 35, pellets: 1, auto: false, reloadTime: 700, unlocked: true },
-            2: { id: 2, name: "Shotgun", ammo: 8, res: 40, max: 8, maxRes: 40, dmg: 26, pellets: 7, auto: false, reloadTime: 1000, unlocked: false },
-            3: { id: 3, name: "AR", ammo: 35, res: 180, max: 35, maxRes: 300, dmg: 40, pellets: 1, auto: true, reloadTime: 1200, unlocked: false }
+            1: { id: 1, name: "Pistol", ammo: 12, res: 60, max: 12, maxRes: 120, dmg: 35, pellets: 1, auto: false, reloadTime: 700, unlocked: true, cooldown: 0.22, recoil: 0.01, sound: 'pistol' },
+            2: { id: 2, name: "Shotgun", ammo: 8, res: 40, max: 8, maxRes: 40, dmg: 26, pellets: 7, auto: false, reloadTime: 1000, unlocked: false, cooldown: 0.5, recoil: 0.03, sound: 'shotgun' },
+            3: { id: 3, name: "AR", ammo: 35, res: 180, max: 35, maxRes: 300, dmg: 40, pellets: 1, auto: true, reloadTime: 1200, unlocked: false, cooldown: 0.12, recoil: 0.015, sound: 'ar' },
+            4: { id: 4, name: "SMG", ammo: 30, res: 180, max: 30, maxRes: 360, dmg: 18, pellets: 1, auto: true, reloadTime: 900, unlocked: false, cooldown: 0.08, recoil: 0.012, sound: 'smg' },
+            5: { id: 5, name: "LMG", ammo: 75, res: 300, max: 75, maxRes: 450, dmg: 32, pellets: 1, auto: true, reloadTime: 2200, unlocked: false, cooldown: 0.1, recoil: 0.02, sound: 'lmg' },
+            6: { id: 6, name: "Magnum", ammo: 6, res: 36, max: 6, maxRes: 60, dmg: 90, pellets: 1, auto: false, reloadTime: 1400, unlocked: false, cooldown: 0.45, recoil: 0.05, sound: 'magnum' }
         };
+        const GUN_IDS = [1, 2, 3, 4, 5, 6];
 
         const raycaster = new THREE.Raycaster();
+        const VM_GROUPS = { 0: vmHands, 1: vmPistol, 2: vmShotgun, 3: vmAR, 4: vmSMG, 5: vmLMG, 6: vmMagnum };
         function switchWeapon(id) {
             if (isReloading || (id !== 0 && !guns[id].unlocked)) return;
             equipped = id;
-            vmHands.visible = (id === 0);
-            vmPistol.visible = (id === 1);
-            vmShotgun.visible = (id === 2);
-            vmAR.visible = (id === 3);
+            for (let k in VM_GROUPS) VM_GROUPS[k].visible = (parseInt(k) === id);
             document.getElementById('ammo').style.display = id !== 0 ? 'block' : 'none';
             if (currentGameState === STATES.PLAYING) document.getElementById('crosshair').style.display = id !== 0 ? 'block' : 'none';
             updateAmmoUI();
@@ -776,6 +873,9 @@
             if (equipped === 1) { pSlide.position.z += 0.05; setTimeout(() => pSlide.position.z -= 0.05, 250); }
             else if (equipped === 2) { pump.position.z -= 0.1; setTimeout(() => pump.position.z += 0.1, 300); }
             else if (equipped === 3) { arMag.position.y -= 0.2; setTimeout(() => arMag.position.y += 0.2, 500); }
+            else if (equipped === 4) { smgMag.position.y -= 0.18; setTimeout(() => smgMag.position.y += 0.18, 400); }
+            else if (equipped === 5) { lmgDrum.position.y -= 0.22; setTimeout(() => lmgDrum.position.y += 0.22, 900); }
+            else if (equipped === 6) { magCylinder.rotation.x += 0.6; setTimeout(() => magCylinder.rotation.x -= 0.6, 550); }
 
             setTimeout(() => {
                 const need = guns[equipped].max - guns[equipped].ammo; const pull = Math.min(need, guns[equipped].res);
@@ -814,8 +914,7 @@
         function fireGun() {
             if (isReloading || guns[equipped].ammo <= 0) { if (guns[equipped].ammo === 0) initiateReload(); return; }
             guns[equipped].ammo--; updateAmmoUI();
-            const wName = (equipped === 1) ? 'pistol' : ((equipped === 2) ? 'shotgun' : 'ar');
-            playShot(wName); pitch += (equipped === 3 ? 0.015 : (isAiming ? 0.01 : 0.03));
+            playShot(guns[equipped].sound); pitch += isAiming ? guns[equipped].recoil * 0.5 : guns[equipped].recoil;
             viewmodel.position.z += isAiming ? 0.08 : 0.18;
             setTimeout(() => { viewmodel.position.z -= isAiming ? 0.08 : 0.18; }, 100);
             flash.visible = true; flash.rotation.z = Math.random() * Math.PI;
@@ -837,10 +936,10 @@
                 }
             }
             hitTotals.forEach((info, zData) => {
-                zData.mesh.translateZ(equipped === 3 ? -0.1 : -0.4);
+                zData.mesh.translateZ(guns[equipped].auto ? -0.1 : -0.4);
                 applyDamageToZombie(zData, info.dmg, info.point);
             });
-            fireCooldown = (equipped === 1) ? 0.22 : ((equipped === 3) ? 0.12 : 0.5);
+            fireCooldown = guns[equipped].cooldown;
         }
 
         let velY = 0; const grav = 18; let isGrounded = true;
@@ -853,10 +952,6 @@
             return false;
         }
 
-        function nearBarrier() {
-            if (barrierOpen) return false; const dx = camera.position.x - (-11); const dz = camera.position.z - 41;
-            return Math.sqrt(dx*dx + dz*dz) < 3;
-        }
         function getNearestWallbuy() {
             for (let w of wallbuys) {
                 const dx = camera.position.x - w.x; const dz = camera.position.z - w.z;
@@ -864,7 +959,8 @@
             } return null;
         }
         function tryInteract() {
-            if (nearBarrier() && pts >= BARRIER_COST) tryOpenBarrier();
+            const door = getNearestDoor();
+            if (door) tryOpenDoor(door);
             const wb = getNearestWallbuy();
             if (wb) {
                 if (!guns[wb.id].unlocked && pts >= wb.cost) {
@@ -908,7 +1004,11 @@
                 }
 
                 const prompt = document.getElementById('promptText'); let pText = "";
-                if (nearBarrier() && pts >= BARRIER_COST) pText = "[E] OPEN BARRIER - 750";
+                const door = getNearestDoor();
+                if (door) {
+                    if (!doorRequirementsMet(door.def)) pText = `[LOCKED] OPEN A PRIOR DOOR FIRST`;
+                    else pText = `[E] OPEN ${door.def.name.toUpperCase()} - ${door.def.cost}`;
+                }
                 const wb = getNearestWallbuy();
                 if (wb) {
                     if (!guns[wb.id].unlocked) pText = `[E] BUY ${wb.name} - ${wb.cost}`;
@@ -960,7 +1060,8 @@
                 if (zombiesToSpawn > 0 && zombies.length < 24) {
                     waveSpawnTimer -= dt;
                     if (waveSpawnTimer <= 0) {
-                        const pt = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
+                        const avail = getAvailableSpawnPoints();
+                        const pt = avail[Math.floor(Math.random() * avail.length)].pos;
                         const ox = (Math.random()-0.5)*2; const oz = (Math.random()-0.5)*2;
                         spawnZombie(pt.x + ox, pt.z + oz, 1 + (currentRound * 0.04), 1 + (currentRound * 0.09));
                         zombiesToSpawn--; waveSpawnTimer = 0.5 + Math.random()*1.5;
@@ -980,22 +1081,36 @@
                         continue;
                     }
                     const dx = px - mesh.position.x; const dz = pz - mesh.position.z; const dist = Math.sqrt(dx*dx + dz*dz);
-                    
-                    if (dist > 28 || !isInsideMapFloor(mesh.position.x, mesh.position.z)) {
-                        let respawnSuccess = false;
-                        for (let attempt = 0; attempt < 20; attempt++) {
-                            const rx = -25 + Math.random() * 80;
-                            const rz = 0 + Math.random() * 55;
-                            if (!checkCol(rx, rz) && isInsideMapFloor(rx, rz)) {
-                                mesh.position.set(rx, 0, rz);
-                                respawnSuccess = true;
-                                break;
+
+                    // Only relocate a zombie once it's been genuinely off the walkable
+                    // area or absurdly far away for a sustained period - not on a single
+                    // frame. This removes the constant rubber-banding/teleporting that
+                    // happened whenever any zombie briefly crossed a doorway or wandered
+                    // to the far side of the (large) map.
+                    const offFloor = !isInsideMapFloor(mesh.position.x, mesh.position.z);
+                    z.offMapTimer = offFloor ? (z.offMapTimer || 0) + dt : 0;
+                    z.leashTimer = dist > 90 ? (z.leashTimer || 0) + dt : 0;
+
+                    if (z.offMapTimer > 1.5 || z.leashTimer > 3) {
+                        const avail = getAvailableSpawnPoints();
+                        const candidates = avail.slice().sort((a, b) => {
+                            const da = (a.pos.x - px) ** 2 + (a.pos.z - pz) ** 2;
+                            const db = (b.pos.x - px) ** 2 + (b.pos.z - pz) ** 2;
+                            return da - db;
+                        });
+                        let placed = false;
+                        for (let c of candidates) {
+                            for (let attempt = 0; attempt < 6; attempt++) {
+                                const rx = c.pos.x + (Math.random() - 0.5) * 3;
+                                const rz = c.pos.z + (Math.random() - 0.5) * 3;
+                                if (!checkCol(rx, rz) && isInsideMapFloor(rx, rz)) {
+                                    mesh.position.set(rx, 0, rz); placed = true; break;
+                                }
                             }
+                            if (placed) break;
                         }
-                        if (!respawnSuccess) {
-                            const pt = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
-                            mesh.position.copy(pt);
-                        }
+                        if (!placed) mesh.position.copy(candidates[0].pos);
+                        z.offMapTimer = 0; z.leashTimer = 0;
                     }
 
                     const [torso, head, aL, aR, lL, lR] = z.parts; z.attackCd -= dt;
