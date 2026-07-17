@@ -201,6 +201,7 @@ document.addEventListener('keydown', startMenuMusicOnce);
 <div id="pauseMenu" class="menu-overlay">
 <h1>pause</h1>
 <button class="btn" id="resumeBtn">continue</button>
+<button class="btn" id="pauseSettingsBtn">settings</button>
 <button class="btn" id="leaveBtn">leave</button>
 </div>
 <div id="gameOverMenu" class="menu-overlay">
@@ -895,7 +896,7 @@ it.classList.add('dvd-active'); positionHandAt(it);
 });
 it.addEventListener('click', () => {
 const action = it.dataset.action; if (action === 'start') enterGame();
-else if (action === 'settings') { document.getElementById('mainMenu').style.display = 'none'; document.getElementById('settingsMenu').style.display = 'flex'; }
+else if (action === 'settings') { settingsReturnTo = 'mainMenu'; document.getElementById('mainMenu').style.display = 'none'; document.getElementById('settingsMenu').style.display = 'flex'; }
 else if (action === 'account') { document.getElementById('mainMenu').style.display = 'none'; document.getElementById('accountMenu').style.display = 'flex'; }
 else if (action === 'quit') handleQuit();
 });
@@ -929,8 +930,14 @@ musicVolSlider.addEventListener('input', () => {
 musicVolume = parseInt(musicVolSlider.value, 10); bgMusic.volume = musicVolume / 100; updateMusicVolLabel();
 });
 updateMusicVolLabel();
+let settingsReturnTo = 'mainMenu';
 document.getElementById('settingsBackBtn').addEventListener('click', () => {
-document.getElementById('settingsMenu').style.display = 'none'; document.getElementById('mainMenu').style.display = 'flex';
+document.getElementById('settingsMenu').style.display = 'none';
+document.getElementById(settingsReturnTo).style.display = 'flex';
+});
+document.getElementById('pauseSettingsBtn').addEventListener('click', () => {
+settingsReturnTo = 'pauseMenu';
+document.getElementById('pauseMenu').style.display = 'none'; document.getElementById('settingsMenu').style.display = 'flex';
 });
 document.getElementById('resumeBtn').addEventListener('click', resumeGame);
 document.getElementById('restartBtn').addEventListener('click', () => {
