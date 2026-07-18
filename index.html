@@ -146,14 +146,14 @@ applyMenuGradientOnly();
 <script>
 var MUSIC_MENU = [
 "audio/menu-1.mp3",
-"audio/menu-1.mp3"
+""
 ];
 var MUSIC_GAME = [
 "audio/menu-1.mp3",
-"audio/menu-1.mp3",
-"audio/menu-1.mp3",
-"audio/menu-1.mp3",
-"audio/menu-1.mp3"
+"",
+"",
+"",
+""
 ];
 var bgMusic = new Audio();
 var musicVolume = 70;
@@ -161,12 +161,13 @@ bgMusic.volume = musicVolume / 100;
 var activeMusicPlaylist = null;
 var lastMusicTrack = null;
 function playRandomTrack(list) {
-if (!list || !list.length) return;
-var idx = Math.floor(Math.random() * list.length);
-var hasVariety = list.some(function(track) { return track !== list[0]; });
-if (hasVariety) { while (list[idx] === lastMusicTrack) idx = Math.floor(Math.random() * list.length); }
-lastMusicTrack = list[idx];
-bgMusic.src = list[idx];
+var available = (list || []).filter(function(track) { return track && track.trim(); });
+if (!available.length) return;
+var idx = Math.floor(Math.random() * available.length);
+var hasVariety = available.some(function(track) { return track !== available[0]; });
+if (hasVariety) { while (available[idx] === lastMusicTrack) idx = Math.floor(Math.random() * available.length); }
+lastMusicTrack = available[idx];
+bgMusic.src = available[idx];
 bgMusic.play().catch(function(){});
 }
 function setMusicPlaylist(list) {
@@ -725,19 +726,40 @@ const magBody = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.09, 0.14), matGunMe
 const magCylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.06, 10), matGunMetal); magCylinder.rotation.z = Math.PI/2; magCylinder.position.set(0.22, -0.22, -0.24); vmMagnum.add(magCylinder);
 const magBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.4), matGunMetal); magBarrel.position.set(0.22, -0.22, -0.55); vmMagnum.add(magBarrel);
 const magGrip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.13, 0.06), matGunWood); magGrip.position.set(0.22, -0.3, -0.14); magGrip.rotation.x = 0.25; vmMagnum.add(magGrip);
-vmPistol.position.set(0.08, 0, 0);
-vmShotgun.position.set(0.05, 0, 0);
-vmAR.position.set(0.05, 0, 0);
-vmSMG.position.set(0.05, 0, 0);
-vmLMG.position.set(0.04, 0, 0);
-vmMagnum.position.set(0.08, 0, 0);
-const MUZZLE_OFFSETS = {
-1: { x: 0.30, y: -0.21, z: -0.56 },
-2: { x: 0.30, y: -0.22, z: -1.1 },
-3: { x: 0.30, y: -0.22, z: -1.05 },
-4: { x: 0.30, y: -0.21, z: -0.7 },
-5: { x: 0.30, y: -0.21, z: -1.175 },
-6: { x: 0.30, y: -0.22, z: -0.75 }
+// The right hand's grip point never moves - it's fixed at rHand's position no matter
+// what's equipped. To stop guns clipping through the camera/each other, every weapon
+// group is positioned so that ITS OWN grip mesh lands exactly on this same point,
+// instead of using arbitrary hand-tuned offsets that didn't line up with the hand.
+const HAND_POS = { x: 0.315, y: -0.24, z: -0.55 };
+// Grip-mesh local position within each weapon's own group (before that group is moved).
+const GRIP_LOCAL = {
+1: { x: 0.22, y: -0.27, z: -0.38 }, // pGrip
+2: { x: 0.25, y: -0.24, z: -0.10 }, // receiver
+3: { x: 0.25, y: -0.25, z: -0.30 }, // arBody
+4: { x: 0.25, y: -0.24, z: -0.20 }, // smgBody
+5: { x: 0.26, y: -0.24, z: -0.32 }, // lmgBody
+6: { x: 0.22, y: -0.30, z: -0.14 }  // magGrip
+};
+function anchorToHand(group, id) {
+const g = GRIP_LOCAL[id];
+group.position.set(HAND_POS.x - g.x, HAND_POS.y - g.y, HAND_POS.z - g.z);
+}
+anchorToHand(vmPistol, 1);
+anchorToHand(vmShotgun, 2);
+anchorToHand(vmAR, 3);
+anchorToHand(vmSMG, 4);
+anchorToHand(vmLMG, 5);
+anchorToHand(vmMagnum, 6);
+// Muzzle tip positions, stored local to each weapon's own group (matching the barrel
+// mesh that makes them up) so they automatically track wherever that group ends up,
+// instead of being separately hand-tuned absolute numbers that drift out of sync.
+const MUZZLE_LOCAL = {
+1: { x: 0.22, y: -0.21, z: -0.56 },
+2: { x: 0.25, y: -0.22, z: -1.1 },
+3: { x: 0.25, y: -0.22, z: -1.05 },
+4: { x: 0.25, y: -0.21, z: -0.7 },
+5: { x: 0.26, y: -0.21, z: -1.175 },
+6: { x: 0.22, y: -0.22, z: -0.75 }
 };
 const flash = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6), new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, side: THREE.DoubleSide }));
 flash.position.set(0.30, -0.22, -0.56); flash.visible = false; viewmodel.add(flash);
@@ -893,10 +915,11 @@ switchWeapon(1);
 document.getElementById('points').innerText = pts;
 updateHpBar();
 camera.position.set(0, 1.6, 4); yaw = 0; pitch = 0; camera.rotation.set(0, 0, 0);
-isAiming = false; camera.fov = 120; camera.updateProjectionMatrix();
+isAiming = false; targetFov = 120; camera.fov = 120; camera.updateProjectionMatrix();
 }
 let yaw = 0, pitch = 0; const keys = {};
 let isAiming = false;
+let targetFov = 120;
 function tryRequestPointerLock() {
 try { const p = document.body.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (err) {}
 }
@@ -1025,15 +1048,11 @@ if (currentGameState === STATES.PLAYING && document.pointerLockElement !== docum
 document.addEventListener('mousedown', e => {
 if (e.button === 2 && currentGameState === STATES.PLAYING && equipped !== 0) {
 isAiming = true;
-camera.fov = 73;
-camera.updateProjectionMatrix();
 }
 });
 document.addEventListener('mouseup', e => {
 if (e.button === 2 && currentGameState === STATES.PLAYING) {
 isAiming = false;
-camera.fov = 120;
-camera.updateProjectionMatrix();
 }
 });
 document.addEventListener('contextmenu', e => e.preventDefault());
@@ -1113,8 +1132,10 @@ guns[equipped].ammo--; updateAmmoUI();
 playShot(guns[equipped].sound); pitch += isAiming ? guns[equipped].recoil * 0.5 : guns[equipped].recoil;
 viewmodel.position.z += isAiming ? 0.08 : 0.18;
 setTimeout(() => { viewmodel.position.z -= isAiming ? 0.08 : 0.18; }, 100);
-const mz = MUZZLE_OFFSETS[equipped] || MUZZLE_OFFSETS[1];
-flash.position.set(mz.x, mz.y, mz.z); muzzleLight.position.set(mz.x, mz.y, mz.z);
+const mz = MUZZLE_LOCAL[equipped] || MUZZLE_LOCAL[1];
+const mzGrp = VM_GROUPS[equipped].position;
+flash.position.set(mzGrp.x + mz.x, mzGrp.y + mz.y, mzGrp.z + mz.z);
+muzzleLight.position.copy(flash.position);
 flash.visible = true; flash.rotation.z = Math.random() * Math.PI;
 setTimeout(() => flash.visible = false, 50); muzzleLight.intensity = 5;
 setTimeout(() => muzzleLight.intensity = 0, 60);
@@ -1217,17 +1238,29 @@ const stepInterval = keys['ShiftLeft'] ? 260 : 340;
 if (performance.now() - lastFootstep > stepInterval) { playFootstep(); lastFootstep = performance.now(); }
 }
 if (equipped !== 0) {
-const aimOffset = isAiming ? -0.12 : 0;
-viewmodel.position.x = THREE.MathUtils.lerp(viewmodel.position.x, aimOffset * 0.6, 0.1);
-viewmodel.position.y = THREE.MathUtils.lerp(viewmodel.position.y, aimOffset * 0.3, 0.1);
-viewmodel.position.z = THREE.MathUtils.lerp(viewmodel.position.z, aimOffset, 0.12);
+// ADS actually raises the gun so its sights land under the crosshair (muzzle x/y
+// offsets are consistently ~0.30/-0.21 across every weapon, so centering on that
+// brings whichever gun is equipped up to eye level) rather than just zooming the camera.
+const aimTargetX = isAiming ? -0.30 : 0;
+const aimTargetY = isAiming ? 0.21 : 0;
+const aimTargetZ = isAiming ? 0.06 : 0;
+targetFov = isAiming ? 100 : 120;
+viewmodel.position.x = THREE.MathUtils.lerp(viewmodel.position.x, aimTargetX, 0.16);
+viewmodel.position.y = THREE.MathUtils.lerp(viewmodel.position.y, aimTargetY, 0.16);
+viewmodel.position.z = THREE.MathUtils.lerp(viewmodel.position.z, aimTargetZ, 0.18);
 if (isReloading) viewmodel.position.y -= 0.15;
-viewmodel.position.x += Math.sin(sway*1.5)*0.002;
-if (isMoving && isGrounded) { viewmodel.position.y += Math.sin(bob*1.5) * 0.008; viewmodel.position.x += Math.cos(bob*0.75) * 0.008; }
+const swaySteadying = isAiming ? 0.3 : 1;
+viewmodel.position.x += Math.sin(sway*1.5)*0.002*swaySteadying;
+if (isMoving && isGrounded) { viewmodel.position.y += Math.sin(bob*1.5) * 0.008 * swaySteadying; viewmodel.position.x += Math.cos(bob*0.75) * 0.008 * swaySteadying; }
 } else {
 if (isMoving && isGrounded) {
 hRight.position.y = -0.24 + Math.sin(bob*1.5) * 0.05;
 } else { hRight.position.y = -0.24; }
+targetFov = 120;
+}
+if (Math.abs(camera.fov - targetFov) > 0.05) {
+camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.15);
+camera.updateProjectionMatrix();
 }
 if (fireCooldown > 0) fireCooldown -= dt;
 if (isMouseDown && equipped !== 0 && guns[equipped].auto && fireCooldown <= 0) fireGun();
