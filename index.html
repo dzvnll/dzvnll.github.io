@@ -163,7 +163,8 @@ var lastMusicTrack = null;
 function playRandomTrack(list) {
 if (!list || !list.length) return;
 var idx = Math.floor(Math.random() * list.length);
-if (list.length > 1) { while (list[idx] === lastMusicTrack) idx = Math.floor(Math.random() * list.length); }
+var hasVariety = list.some(function(track) { return track !== list[0]; });
+if (hasVariety) { while (list[idx] === lastMusicTrack) idx = Math.floor(Math.random() * list.length); }
 lastMusicTrack = list[idx];
 bgMusic.src = list[idx];
 bgMusic.play().catch(function(){});
