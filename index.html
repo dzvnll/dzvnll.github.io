@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,6 +7,7 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=VT323&family=Nosifer&display=swap');
 * { margin:0; padding:0; box-sizing:border-box; user-select: none; }
+html { --hud-scale: 1; }
 html, body { width:100%; height:100%; overflow:hidden; background:#000; }
 canvas {
 display: block; width: 100vw !important; height: 100vh !important; object-fit: fill;
@@ -18,29 +20,29 @@ position: fixed; inset: 0; pointer-events: none; z-index: 10; font-family: 'VT32
 font-weight: normal; text-transform: uppercase; display: none;
 }
 .hud-text { position: absolute; text-shadow: 2px 2px 0 #000, 3px 3px 0 #000; }
-#round { bottom: 20px; left: 30px; font-size: 72px; color: #a30000; }
+#round { bottom: 20px; left: 30px; font-size: calc(72px * var(--hud-scale)); color: #a30000; }
 #roundNumber { color: #fff; text-shadow: 2px 2px 0 #a30000, 4px 4px 0 #000; }
-#points { bottom: 20px; right: 40px; font-size: 64px; color: #ffcc00; }
-#ammo { bottom: 80px; right: 40px; font-size: 48px; color: #fff; }
+#points { bottom: 20px; right: 40px; font-size: calc(64px * var(--hud-scale)); color: #ffcc00; }
+#ammo { bottom: 80px; right: 40px; font-size: calc(48px * var(--hud-scale)); color: #fff; }
 #waveNotice {
-top: 30%; left: 50%; transform: translate(-50%, -50%); font-size: 80px; color: #a30000;
+top: 30%; left: 50%; transform: translate(-50%, -50%); font-size: calc(80px * var(--hud-scale)); color: #a30000;
 text-align: center; opacity: 0; transition: opacity 0.5s; text-shadow: 4px 4px 0 #000;
 }
 #promptText {
-bottom: 140px; left: 50%; transform: translateX(-50%); font-size: 32px; color: #ffcc00;
+bottom: 140px; left: 50%; transform: translateX(-50%); font-size: calc(32px * var(--hud-scale)); color: #ffcc00;
 text-align: center; opacity: 0; transition: opacity 0.2s; white-space: nowrap;
 }
 #hpWrap {
-bottom: 20px; left: 50%; transform: translateX(-50%); width: 300px; height: 24px;
+bottom: 20px; left: 50%; transform: translateX(-50%); width: calc(300px * var(--hud-scale)); height: calc(24px * var(--hud-scale));
 border: 3px solid #000; background: rgba(40,0,0,0.7);
 }
 #hpFill { position:absolute; top:0; left:0; bottom:0; width:100%; background:#a30000; transition: width 0.2s; }
 #dmgVignette { position:fixed; inset:0; box-shadow: inset 0 0 150px 40px rgba(150,0,0,0.9); opacity: 0; transition: opacity 0.15s; pointer-events:none; z-index: 9; }
-#crosshair { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 15; pointer-events: none; display: none; }
+#crosshair { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(var(--hud-scale)); z-index: 15; pointer-events: none; display: none; }
 #crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255, 255, 255, 0.8); }
 #crosshair::before { width: 14px; height: 2px; top: -1px; left: -7px; }
 #crosshair::after { width: 2px; height: 14px; top: -7px; left: -1px; }
-#hitmarker { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 34px; font-family: 'VT323', monospace; color: #fff; z-index: 16; pointer-events: none; opacity: 0; transition: opacity 0.08s; text-shadow: 0 0 4px #000, 1px 1px 0 #000; }
+#hitmarker { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: calc(34px * var(--hud-scale)); font-family: 'VT323', monospace; color: #fff; z-index: 16; pointer-events: none; opacity: 0; transition: opacity 0.08s; text-shadow: 0 0 4px #000, 1px 1px 0 #000; }
 .menu-overlay { position: fixed; inset: 0; background: radial-gradient(ellipse at 30% 60%, rgba(90,0,0,0.35), transparent 60%), radial-gradient(ellipse at center, rgba(20,0,0,0.4) 0%, rgba(0,0,0,0.97) 75%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; font-family: 'VT323', monospace; color: #fff; box-shadow: inset 0 0 200px 40px #000; overflow: hidden; }
 .menu-overlay::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0.12; background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.4) 0px, transparent 1px, transparent 2px); mix-blend-mode: overlay; }
 h1 { font-size: 100px; color: #a30000; margin-bottom: 10px; text-shadow: 5px 5px 0 #000; text-align: center; }
@@ -144,24 +146,16 @@ applyMenuGradientOnly();
 })();
 </script>
 <script>
-var MUSIC_MENU = [
-"audio/menu-1.mp3",
-""
-];
-var MUSIC_GAME = [
-"audio/menu-1.mp3",
-"",
-"",
-"",
-""
-];
+var MUSIC_MENU = [];
+var MUSIC_GAME = [];
 var bgMusic = new Audio();
 var musicVolume = 70;
 bgMusic.volume = musicVolume / 100;
 var activeMusicPlaylist = null;
 var lastMusicTrack = null;
+var knownBadTracks = new Set(); 
 function playRandomTrack(list) {
-var available = (list || []).filter(function(track) { return track && track.trim(); });
+var available = (list || []).filter(function(track) { return track && track.trim() && !knownBadTracks.has(track); });
 if (!available.length) return;
 var idx = Math.floor(Math.random() * available.length);
 var hasVariety = available.some(function(track) { return track !== available[0]; });
@@ -174,6 +168,12 @@ bgMusic.addEventListener('error', function() {
 var mediaErr = bgMusic.error;
 var codes = { 1: 'ABORTED', 2: 'NETWORK', 3: 'DECODE (file loaded but is not valid audio - check for a Git LFS pointer file)', 4: 'SRC_NOT_SUPPORTED (likely a 404 - check the path/casing)' };
 console.warn('[music] failed to load "' + bgMusic.src + '":', mediaErr ? (codes[mediaErr.code] || mediaErr.code) : 'unknown error');
+if (bgMusic.src) {
+var failedSrc = bgMusic.currentSrc || bgMusic.src;
+var matchingEntry = (activeMusicPlaylist || []).find(function(t) { return failedSrc.endsWith(t); });
+knownBadTracks.add(matchingEntry || failedSrc);
+}
+if (activeMusicPlaylist) playRandomTrack(activeMusicPlaylist);
 });
 function setMusicPlaylist(list) {
 if (activeMusicPlaylist === list) return;
@@ -236,6 +236,7 @@ document.addEventListener('keydown', startMenuMusicOnce);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
 <script>
 let actx = null;
 function ensureAudio() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); }
@@ -364,9 +365,11 @@ renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.BasicShadowMa
 document.body.appendChild(renderer.domElement);
 renderer.domElement.style.display = 'none';
 let gameVisible = false;
+function hudScaleForRes(res) { return THREE.MathUtils.clamp(1.15 - res * 0.5, 1, 1.3); }
 function resize() {
 renderer.setSize(window.innerWidth * RES_SCALE, window.innerHeight * RES_SCALE, false);
 camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+document.documentElement.style.setProperty('--hud-scale', hudScaleForRes(RES_SCALE));
 }
 window.addEventListener('resize', resize); resize();
 function makeTex(type) {
@@ -460,6 +463,21 @@ ctx.fillStyle = dg; ctx.fillRect(x - dripW/2, y, dripW, dripLen);
 const tex = new THREE.CanvasTexture(c); tex.magFilter = tex.minFilter = THREE.LinearFilter;
 tex.generateMipmaps = false; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; return tex;
 }
+const GORE_TEX_POOL_SIZE = 5;
+const goreTexPool = {};
+const pooledGoreTextures = new WeakSet();
+function getPooledGoreTex(baseColor, opts = {}) {
+const key = baseColor + '|' + (opts.wounds ?? 3);
+let pool = goreTexPool[key];
+if (!pool) { pool = []; goreTexPool[key] = pool; }
+if (pool.length < GORE_TEX_POOL_SIZE) {
+const tex = makeGoreTex(baseColor, opts);
+pooledGoreTextures.add(tex);
+pool.push(tex);
+return tex;
+}
+return pool[Math.floor(Math.random() * pool.length)];
+}
 const bloodSpriteTex = (function() {
 const size = 32; const c = document.createElement('canvas'); c.width = size; c.height = size;
 const ctx = c.getContext('2d'); const g = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
@@ -503,15 +521,19 @@ const geo = new THREE.BoxGeometry(w, 4, d);
 const uvs = geo.attributes.uv; for (let i = 0; i < uvs.count; i++) { uvs.setX(i, uvs.getX(i)*(w>d?w/4:d/4)); uvs.setY(i, uvs.getY(i)); }
 const m = new THREE.Mesh(geo, matWall); m.position.set(x, 2, z);
 m.castShadow = true; m.receiveShadow = true; scene.add(m);
+mapStructureMeshes.push(m);
 const collider = { minX: x-w/2, maxX: x+w/2, minZ: z-d/2, maxZ: z+d/2, id: id||null, mesh: m };
 colliders.push(collider); return collider;
 }
+const mapStructureMeshes = []; // every wall/floor/ceiling mesh, tracked for disposeMapResources()
 function addFloor(x, z, w, d, mat, hasCeiling = true) {
 const f = new THREE.Mesh(new THREE.BoxGeometry(w, 0.2, d), mat);
 f.position.set(x, -0.1, z); f.receiveShadow = true; scene.add(f);
+mapStructureMeshes.push(f);
 if (hasCeiling) {
 const c = new THREE.Mesh(new THREE.BoxGeometry(w, 0.2, d), matWall);
 c.position.set(x, 4.1, z); c.receiveShadow = true; scene.add(c);
+mapStructureMeshes.push(c);
 }
 }
 addFloor(0, 4, 10, 10, matFloor);
@@ -623,7 +645,7 @@ return d.requires.every(k => doorState[k].open);
 function tryOpenDoor(state) {
 const d = state.def;
 if (state.open || pts < d.cost || !doorRequirementsMet(d)) return;
-pts -= d.cost; document.getElementById('points').innerText = pts;
+pts -= d.cost; hudDirty.points = true;
 state.open = true; scene.remove(state.mesh);
 const idx = colliders.indexOf(state.collider); if (idx >= 0) colliders.splice(idx, 1);
 playChime();
@@ -660,13 +682,29 @@ const wallbuys = [
 { x: 56.95, y: 1.6, z: 36, id: 6, cost: 1100, ammoCost: 300, name: "Magnum", type: "chalkMagnum", side: 'xneg' },
 { x: 52, y: 1.6, z: 50.45, id: 4, cost: 950, ammoCost: 350, name: "SMG", type: "chalkSMG", side: 'zneg' }
 ];
+const wallbuyTexCache = {};
+const wallbuyMeshes = [];
 wallbuys.forEach(wb => {
-const mat = new THREE.MeshBasicMaterial({ map: makeTex(wb.type), transparent: true, side: THREE.DoubleSide, depthTest: false });
+if (!wallbuyTexCache[wb.type]) wallbuyTexCache[wb.type] = makeTex(wb.type);
+const mat = new THREE.MeshBasicMaterial({ map: wallbuyTexCache[wb.type], transparent: true, side: THREE.DoubleSide, depthTest: false });
 const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.0), mat);
 mesh.position.set(wb.x, wb.y, wb.z);
 orientWallbuy(mesh, wb.side);
 scene.add(mesh);
+wallbuyMeshes.push(mesh);
 });
+function disposeMapResources() {
+mapStructureMeshes.forEach(m => { if (m.geometry) m.geometry.dispose(); });
+[matWall, matFloor, matDirt, matSkin, matGlove, matGunMetal, matGunWood, matBarrier, matPlayerCloth].forEach(mat => {
+if (mat.map) mat.map.dispose();
+mat.dispose();
+});
+wallbuyMeshes.forEach(m => { m.geometry.dispose(); m.material.dispose(); });
+Object.values(wallbuyTexCache).forEach(tex => tex.dispose());
+DOORS.forEach(d => { const state = doorState[d.key]; if (state && state.mesh.geometry) state.mesh.geometry.dispose(); });
+Object.values(goreTexPool).flat().forEach(tex => tex.dispose());
+}
+window.addEventListener('beforeunload', disposeMapResources);
 scene.add(new THREE.AmbientLight(0x1a1a1c, 1.05));
 function addPointLight(color, intensity, dist, x, y, z, shadow) {
 const pl = new THREE.PointLight(color, intensity, dist); pl.position.set(x, y, z);
@@ -695,12 +733,9 @@ function armSegment(w, h, d, mat, segs) {
 const geo = new THREE.BoxGeometry(w, h, d, segs || 1, segs || 1, segs || 1); mangleGeometry(geo, 0.02);
 const m = new THREE.Mesh(geo, mat); m.castShadow = false; return m;
 }
-// Right arm (trigger hand) - always visible, every weapon needs at least this one.
-// Kept to 3 low-poly segments (sleeve, forearm, hand) instead of 5 to stay cheap to render.
 const rSleeve = armSegment(0.16, 0.16, 0.34, matPlayerCloth); rSleeve.position.set(0.33, -0.27, -0.10); vmRightArm.add(rSleeve);
 const rForearm = armSegment(0.13, 0.12, 0.30, matSkin); rForearm.position.set(0.32, -0.255, -0.34); vmRightArm.add(rForearm);
 const rHand = armSegment(0.11, 0.095, 0.22, matGlove); rHand.position.set(0.315, -0.24, -0.55); vmRightArm.add(rHand);
-// Left arm (support hand under the barrel/foregrip) - only shown for two-handed weapons.
 const lSleeve = armSegment(0.17, 0.17, 0.32, matPlayerCloth); lSleeve.position.set(-0.06, -0.34, -0.12); vmLeftArm.add(lSleeve);
 const lForearm = armSegment(0.14, 0.13, 0.32, matSkin); lForearm.position.set(-0.01, -0.32, -0.38); vmLeftArm.add(lForearm);
 const lHand = armSegment(0.12, 0.10, 0.22, matGlove); lHand.position.set(0.05, -0.29, -0.60); vmLeftArm.add(lHand);
@@ -731,33 +766,16 @@ const magBody = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.09, 0.14), matGunMe
 const magCylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.06, 10), matGunMetal); magCylinder.rotation.z = Math.PI/2; magCylinder.position.set(0.22, -0.22, -0.24); vmMagnum.add(magCylinder);
 const magBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.4), matGunMetal); magBarrel.position.set(0.22, -0.22, -0.55); vmMagnum.add(magBarrel);
 const magGrip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.13, 0.06), matGunWood); magGrip.position.set(0.22, -0.3, -0.14); magGrip.rotation.x = 0.25; vmMagnum.add(magGrip);
-// The right hand's grip point never moves - it's fixed at rHand's position no matter
-// what's equipped. To stop guns clipping through the camera/each other, every weapon
-// group is positioned so that ITS OWN grip mesh lands exactly on this same point,
-// instead of using arbitrary hand-tuned offsets that didn't line up with the hand.
 const HAND_POS = { x: 0.315, y: -0.24, z: -0.55 };
-// Grip-mesh local position within each weapon's own group (before that group is moved).
-const GRIP_LOCAL = {
-1: { x: 0.22, y: -0.27, z: -0.38 }, // pGrip
-2: { x: 0.25, y: -0.24, z: -0.10 }, // receiver
-3: { x: 0.25, y: -0.25, z: -0.30 }, // arBody
-4: { x: 0.25, y: -0.24, z: -0.20 }, // smgBody
-5: { x: 0.26, y: -0.24, z: -0.32 }, // lmgBody
-6: { x: 0.22, y: -0.30, z: -0.14 }  // magGrip
-};
-function anchorToHand(group, id) {
-const g = GRIP_LOCAL[id];
-group.position.set(HAND_POS.x - g.x, HAND_POS.y - g.y, HAND_POS.z - g.z);
+function anchorToHand(group, gripMesh) {
+group.position.set(HAND_POS.x - gripMesh.position.x, HAND_POS.y - gripMesh.position.y, HAND_POS.z - gripMesh.position.z);
 }
-anchorToHand(vmPistol, 1);
-anchorToHand(vmShotgun, 2);
-anchorToHand(vmAR, 3);
-anchorToHand(vmSMG, 4);
-anchorToHand(vmLMG, 5);
-anchorToHand(vmMagnum, 6);
-// Muzzle tip positions, stored local to each weapon's own group (matching the barrel
-// mesh that makes them up) so they automatically track wherever that group ends up,
-// instead of being separately hand-tuned absolute numbers that drift out of sync.
+anchorToHand(vmPistol, pGrip);
+anchorToHand(vmShotgun, receiver);
+anchorToHand(vmAR, arBody);
+anchorToHand(vmSMG, smgBody);
+anchorToHand(vmLMG, lmgBody);
+anchorToHand(vmMagnum, magGrip);
 const MUZZLE_LOCAL = {
 1: { x: 0.22, y: -0.21, z: -0.56 },
 2: { x: 0.25, y: -0.22, z: -1.1 },
@@ -778,8 +796,6 @@ function bodyPart(w, h, d, mat) {
 const geo = new THREE.BoxGeometry(w, h, d, 2, 2, 2); mangleGeometry(geo, 0.015);
 const m = new THREE.Mesh(geo, mat); return m;
 }
-// Full organic-mesh body (same tapered-cylinder technique used for the zombies) instead of
-// flat boxes, so looking down shows a rounded torso/limbs rather than chunky slabs.
 const pTorso = makeOrganicLimb(0.27, 0.20, 0.62, matPlayerCloth, 0, true); pTorso.position.set(0, 1.15, -0.05); playerBody.add(pTorso);
 const pShoulderR = makeOrganicLimb(0.11, 0.09, 0.16, matPlayerCloth, 0); pShoulderR.position.set(0.27, 1.35, -0.05); playerBody.add(pShoulderR);
 const pArmRUpper = makeOrganicLimb(0.085, 0.075, 0.42, matPlayerCloth, -0.21); pArmRUpper.position.set(0.30, 1.28, -0.05); pArmRUpper.rotation.x = 0.4; playerBody.add(pArmRUpper);
@@ -787,6 +803,7 @@ const pArmRLower = makeOrganicLimb(0.075, 0.065, 0.38, matSkin, -0.19); pArmRLow
 const pLegL = makeOrganicLimb(0.155, 0.115, 0.90, matPlayerCloth, -0.45); pLegL.position.set(-0.14, 0.94, -0.05); playerBody.add(pLegL);
 const pLegR = makeOrganicLimb(0.155, 0.115, 0.90, matPlayerCloth, -0.45); pLegR.position.set(0.14, 0.94, -0.05); playerBody.add(pLegR);
 const bloodParticles = [];
+const bloodDecals = [];
 function spawnBlood(pos, count = 6, spread = 2.5) {
 for (let i = 0; i < count; i++) {
 const s = new THREE.Sprite(bloodSpriteMat.clone()); const scale = 0.07 + Math.random()*0.12;
@@ -795,12 +812,23 @@ const vel = new THREE.Vector3((Math.random()-0.5)*spread, Math.random()*spread*0
 bloodParticles.push({ mesh: s, vel, life: 0, maxLife: 0.4 + Math.random()*0.35 });
 }
 }
+const MAX_BLOOD_DECALS = 40;
 function spawnBloodDecal(pos) {
+if (bloodDecals.length >= MAX_BLOOD_DECALS) {
+const oldest = bloodDecals.shift();
+clearTimeout(oldest.timer); scene.remove(oldest.mesh);
+oldest.mesh.geometry.dispose(); oldest.mesh.material.dispose();
+}
 const size = 0.55 + Math.random()*0.7; const geo = new THREE.PlaneGeometry(size, size);
 const mat = new THREE.MeshBasicMaterial({ map: bloodSpriteTex, transparent: true, opacity: 0.8, depthWrite: false });
 const decal = new THREE.Mesh(geo, mat); decal.rotation.x = -Math.PI/2; decal.rotation.z = Math.random()*Math.PI*2;
 decal.position.set(pos.x, 0.02, pos.z); scene.add(decal);
-setTimeout(() => { scene.remove(decal); geo.dispose(); mat.dispose(); }, 20000);
+const entry = { mesh: decal, timer: null };
+entry.timer = setTimeout(() => {
+scene.remove(decal); geo.dispose(); mat.dispose();
+const idx = bloodDecals.indexOf(entry); if (idx !== -1) bloodDecals.splice(idx, 1);
+}, 20000);
+bloodDecals.push(entry);
 }
 const zombies = []; let targets = [];
 function mangleGeometry(geo, amount) {
@@ -835,9 +863,9 @@ const isCrawler = legRoll < 0.06;
 const hasLeftLeg = !isCrawler && !(legRoll >= 0.06 && legRoll < 0.14);
 const hasRightLeg = !isCrawler && !(legRoll >= 0.14 && legRoll < 0.22);
 const uniformColors = ['#2b302d', '#282b28', '#382f2f', '#1d211d'];
-const mFace = new THREE.MeshLambertMaterial({ map: makeGoreTex('#4f5247', { wounds: 3 + Math.floor(Math.random()*2), bone: Math.random() < 0.6 }) });
-const mUniform = new THREE.MeshLambertMaterial({ map: makeGoreTex(uniformColors[Math.floor(Math.random()*uniformColors.length)], { wounds: 4 + Math.floor(Math.random()*4) }) });
-const mFlesh = new THREE.MeshLambertMaterial({ map: makeGoreTex('#4f5247', { wounds: 3, bone: Math.random() < 0.45 }) });
+const mFace = new THREE.MeshLambertMaterial({ map: getPooledGoreTex('#4f5247', { wounds: 3 + Math.floor(Math.random()*2), bone: Math.random() < 0.6 }) });
+const mUniform = new THREE.MeshLambertMaterial({ map: getPooledGoreTex(uniformColors[Math.floor(Math.random()*uniformColors.length)], { wounds: 4 + Math.floor(Math.random()*4) }) });
+const mFlesh = new THREE.MeshLambertMaterial({ map: getPooledGoreTex('#4f5247', { wounds: 3, bone: Math.random() < 0.45 }) });
 const torsoBaseY = isCrawler ? 0.42 : 1.0;
 const torso = makeOrganicLimb(0.26, 0.2, 0.62, mUniform, 0, true);
 torso.position.y = torsoBaseY;
@@ -947,6 +975,12 @@ zombies.push(data);
 parts.forEach(p => { p.userData.zData = data; targets.push(p); });
 if (Math.random() < 0.5) playGrowl(isHeavy);
 }
+// Hard cap on concurrently-alive zombies. zombiesToSpawn (the wave "backlog")
+// is also clamped per-wave below so it can't grow unbounded across a very
+// long session (currentRound climbs forever, and the old
+// Math.floor(5 + round^1.15 * 1.8) formula had no ceiling).
+const MAX_ZOMBIES = 24;
+const MAX_ZOMBIES_PER_WAVE = 60;
 let currentRound = 1; let zombiesAlive = 0; let zombiesToSpawn = 0; let waveSpawnTimer = 0;
 const MYSTERY_BOX_LOCATIONS = ['Spawn Room', 'Hallway', 'Courtyard', 'Warehouse', 'Greenhouse', 'Storage', 'Bunker', 'Vault'];
 function maybeShowMysteryBox() {
@@ -962,12 +996,17 @@ document.getElementById('roundNumber').innerText = currentRound;
 const notice = document.getElementById('waveNotice'); document.getElementById('waveNoticeNum').innerText = currentRound;
 notice.style.opacity = 1; setTimeout(() => notice.style.opacity = 0, 3000);
 maybeShowMysteryBox();
-zombiesToSpawn = Math.floor(5 + Math.pow(currentRound, 1.15) * 1.8); 
+// Explicitly clear any stale timer state before arming the new wave, so a
+// deeply-negative leftover value from a previous wave (e.g. if the spawn
+// loop was stalled waiting for the MAX_ZOMBIES cap to free up) can never
+// carry over and cause spawns to fire immediately/in a burst this wave.
+waveSpawnTimer = 0.5;
+zombiesToSpawn = Math.min(MAX_ZOMBIES_PER_WAVE, Math.floor(5 + Math.pow(currentRound, 1.15) * 1.8));
 zombiesAlive = zombiesToSpawn;
 }
 let playerHP = 110; const MAX_HP = 110; let lastHitTime = 0;
 const ZOMBIE_ATTACK_GRACE_MS = 10000; let zombieAttacksDisabledUntil = 0;
-function updateHpBar() { document.getElementById('hpFill').style.width = Math.max(0, playerHP) + '%'; }
+function updateHpBar() { hudDirty.hp = true; }
 function damagePlayer(amount) {
 if (currentGameState !== STATES.PLAYING) return;
 playerHP -= amount; lastHitTime = performance.now(); updateHpBar(); playDamage();
@@ -984,8 +1023,16 @@ document.getElementById('gameOverMenu').style.display = 'flex';
 resetGame();
 }
 function resetGame() {
-zombies.forEach(z => scene.remove(z.mesh)); zombies.length = 0; targets.length = 0;
-bloodParticles.forEach(p => scene.remove(p.mesh)); bloodParticles.length = 0;
+zombies.forEach(z => { scene.remove(z.mesh); disposeZombieMeshes(z); }); zombies.length = 0; targets.length = 0;
+// Each blood particle sprite uses a *clone* of bloodSpriteMat (spawnBlood does
+// `bloodSpriteMat.clone()`), so every one of those clones needs its own
+// dispose() call too - previously only the mesh was removed from the scene
+// here, leaking one Material instance per still-alive particle on every
+// reset/leave. (The sprite geometry itself is a shared THREE.Sprite default
+// and must NOT be disposed here, or it breaks every other sprite.)
+bloodParticles.forEach(p => { scene.remove(p.mesh); p.mesh.material.dispose(); }); bloodParticles.length = 0;
+bloodDecals.forEach(d => { clearTimeout(d.timer); scene.remove(d.mesh); d.mesh.geometry.dispose(); d.mesh.material.dispose(); });
+bloodDecals.length = 0;
 currentRound = 1; zombiesAlive = 0; zombiesToSpawn = 0; waveSpawnTimer = 0; pts = 500; playerHP = MAX_HP;
 GUN_IDS.forEach(id => {
 guns[id].ammo = guns[id].max; guns[id].res = guns[id].maxRes;
@@ -996,8 +1043,9 @@ const state = doorState[key];
 if (state.open) { state.open = false; scene.add(state.mesh); colliders.push(state.collider); }
 }
 switchWeapon(1);
-document.getElementById('points').innerText = pts;
+hudDirty.points = true;
 updateHpBar();
+flushHud();
 camera.position.set(0, 1.6, 4); yaw = 0; pitch = 0; camera.rotation.set(0, 0, 0);
 isAiming = false; targetFov = 120; camera.fov = 120; camera.updateProjectionMatrix();
 }
@@ -1023,6 +1071,12 @@ function pauseGame() {
 if (currentGameState !== STATES.PLAYING) return;
 currentGameState = STATES.PAUSED; document.getElementById('pauseMenu').style.display = 'flex';
 document.getElementById('crosshair').style.display = 'none';
+// Whatever caused the pause (Escape, losing pointer lock, alt-tab, tab going
+// hidden) also means we'll stop receiving keyup/mouseup for anything that was
+// held down at that moment - without this, e.g. alt-tabbing while holding W
+// left the player walking into a wall forever once you tabbed back in.
+for (const k in keys) keys[k] = false;
+isMouseDown = false; isAiming = false;
 }
 function resumeGame() {
 document.getElementById('pauseMenu').style.display = 'none';
@@ -1101,6 +1155,9 @@ const isLocked = document.pointerLockElement === document.body;
 if (isLocked) { hasPointerLock = true; return; }
 if (hasPointerLock && currentGameState === STATES.PLAYING) pauseGame(); hasPointerLock = false;
 });
+document.addEventListener('visibilitychange', () => {
+if (document.hidden && currentGameState === STATES.PLAYING) pauseGame();
+});
 document.addEventListener('keydown', e => {
 if (e.code === 'Escape') {
 if (currentGameState === STATES.PLAYING) pauseGame(); else if (currentGameState === STATES.PAUSED) resumeGame();
@@ -1140,6 +1197,24 @@ isAiming = false;
 }
 });
 document.addEventListener('contextmenu', e => e.preventDefault());
+// points/ammo/hp used to be written straight to the DOM (innerText/style.width)
+// inside high-frequency functions like fireGun(), applyDamageToZombie(), and the
+// passive-regen branch of the main loop (that last one wrote hpFill's style every
+// single animate() frame while regenerating, up to 60x/sec). Each of those is a
+// synchronous layout-invalidating DOM write. Instead, those call sites just flip a
+// dirty flag now, and a single flushHud() call once per animate() frame does the
+// actual DOM write(s) - at most one write per element per frame no matter how many
+// times the underlying value changed that frame.
+const hudDirty = { points: false, ammo: false, hp: false };
+function flushHud() {
+if (hudDirty.points) { document.getElementById('points').innerText = pts; hudDirty.points = false; }
+if (hudDirty.ammo) {
+document.getElementById('ammoCurrent').innerText = guns[equipped].ammo;
+document.getElementById('ammoReserve').innerText = guns[equipped].res;
+hudDirty.ammo = false;
+}
+if (hudDirty.hp) { document.getElementById('hpFill').style.width = Math.max(0, playerHP) + '%'; hudDirty.hp = false; }
+}
 let pts = 500; let isReloading = false; let equipped = 1;
 const guns = {
 0: { id: 0, unlocked: true },
@@ -1168,8 +1243,7 @@ updateAmmoUI();
 }
 function updateAmmoUI() {
 if (equipped === 0) return;
-document.getElementById('ammoCurrent').innerText = guns[equipped].ammo;
-document.getElementById('ammoReserve').innerText = guns[equipped].res;
+hudDirty.ammo = true;
 }
 function initiateReload() {
 if (isReloading || guns[equipped].ammo === guns[equipped].max || guns[equipped].res === 0) return;
@@ -1190,6 +1264,25 @@ function showHitmarker(kill) {
 const hm = document.getElementById('hitmarker');
 hm.style.color = kill ? '#ffcc00' : '#fff'; hm.style.opacity = 1;
 clearTimeout(hm._t); hm._t = setTimeout(() => hm.style.opacity = 0, 110);
+}
+// Frees the per-zombie GPU resources: each zombie gets its own unique canvas-textured
+// materials (mFace/mUniform/mFlesh) and unique geometries per body part, none of which
+// Three.js frees on its own when the mesh is removed from the scene. Call this once,
+// whenever a zombie is fully gone (death fade-out finished, or a hard reset), never per-frame.
+function disposeZombieMeshes(zData) {
+const disposedMats = new Set();
+zData.parts.forEach(p => {
+if (p.geometry) p.geometry.dispose();
+const mat = p.material;
+if (mat && !disposedMats.has(mat)) {
+disposedMats.add(mat);
+// Pooled gore textures are shared across many zombies (see getPooledGoreTex) -
+// only dispose the texture if it's NOT one of the shared pool entries, since
+// freeing a pooled one here would break every other zombie still using it.
+if (mat.map && !pooledGoreTextures.has(mat.map)) mat.map.dispose();
+mat.dispose();
+}
+});
 }
 // Removes an attached limb (arm or leg), leaving its shoulder/hip socket ball exposed as
 // a bloody stump. Safe to call on a limb that's already missing (spawned without it, or
@@ -1216,7 +1309,7 @@ zData.animParts.torso.rotation.x = 0.35;
 }
 function applyDamageToZombie(zData, dmg, hitPoint, limbHit) {
 if (!zData || zData.isDead) return;
-zData.hp -= dmg; pts += 10; document.getElementById('points').innerText = pts;
+zData.hp -= dmg; pts += 10; hudDirty.points = true;
 if (hitPoint) spawnBlood(hitPoint, 5, 2.2);
 zData.parts.forEach(p => { p.material.color.setHex(0xff0000); });
 setTimeout(() => { if (!zData.isDead) zData.parts.forEach(p => { p.material.color.setHex(0xffffff); }); }, 100);
@@ -1225,7 +1318,7 @@ const severChance = Math.min(0.9, 0.1 + dmg * 0.006);
 if (Math.random() < severChance) severLimb(zData, limbHit, hitPoint);
 }
 if (zData.hp <= 0) {
-zData.isDead = true; pts += 60; document.getElementById('points').innerText = pts;
+zData.isDead = true; pts += 60; hudDirty.points = true;
 zData.parts.forEach(p => { p.material.color.setHex(0x330000); });
 spawnBlood(zData.mesh.position.clone().setY(1.1), 14, 3.5); spawnBloodDecal(zData.mesh.position);
 zombiesAlive--; showHitmarker(true);
@@ -1290,7 +1383,7 @@ if (Math.sqrt(dx*dx + dz*dz) < 2.8) return w;
 }
 function tryInteract() {
 const door = getNearestDoor();
-if (door) tryOpenDoor(door);
+if (door) { tryOpenDoor(door); return; }
 const wb = getNearestWallbuy();
 if (wb) {
 if (!guns[wb.id].unlocked && pts >= wb.cost) {
@@ -1298,7 +1391,7 @@ pts -= wb.cost; guns[wb.id].unlocked = true; switchWeapon(wb.id); playChime();
 } else if (guns[wb.id].unlocked && pts >= wb.ammoCost && guns[wb.id].res < guns[wb.id].maxRes) {
 pts -= wb.ammoCost; guns[wb.id].res = guns[wb.id].maxRes; updateAmmoUI(); playChime();
 }
-document.getElementById('points').innerText = pts;
+hudDirty.points = true;
 }
 }
 const clock = new THREE.Clock(); let sway = 0;
@@ -1328,12 +1421,11 @@ playerBody.rotation.y = yaw;
 }
 const prompt = document.getElementById('promptText'); let pText = "";
 const door = getNearestDoor();
+const wb = door ? null : getNearestWallbuy();
 if (door) {
 if (!doorRequirementsMet(door.def)) pText = `[LOCKED] OPEN A PRIOR DOOR FIRST`;
 else pText = `[E] OPEN ${door.def.name.toUpperCase()} - ${door.def.cost}`;
-}
-const wb = getNearestWallbuy();
-if (wb) {
+} else if (wb) {
 if (!guns[wb.id].unlocked) pText = `[E] BUY ${wb.name} - ${wb.cost}`;
 else pText = `[E] BUY AMMO - ${wb.ammoCost}`;
 }
@@ -1369,8 +1461,8 @@ viewmodel.position.x += Math.sin(sway*1.5)*0.002*swaySteadying;
 if (isMoving && isGrounded) { viewmodel.position.y += Math.sin(bob*1.5) * 0.008 * swaySteadying; viewmodel.position.x += Math.cos(bob*0.75) * 0.008 * swaySteadying; }
 } else {
 if (isMoving && isGrounded) {
-hRight.position.y = -0.24 + Math.sin(bob*1.5) * 0.05;
-} else { hRight.position.y = -0.24; }
+rHand.position.y = -0.24 + Math.sin(bob*1.5) * 0.05;
+} else { rHand.position.y = -0.24; }
 targetFov = 120;
 }
 if (Math.abs(camera.fov - targetFov) > 0.05) {
@@ -1381,7 +1473,7 @@ if (fireCooldown > 0) fireCooldown -= dt;
 if (isMouseDown && equipped !== 0 && guns[equipped].auto && fireCooldown <= 0) fireGun();
 else if (isMouseDown && equipped !== 0 && !guns[equipped].auto && fireCooldown <= 0) { fireGun(); isMouseDown = false; }
 else if (isMouseDown && equipped === 0 && fireCooldown <= 0) {
-hRight.position.z -= 0.3; hRight.rotation.y = 0.5; setTimeout(() => { hRight.position.z += 0.3; hRight.rotation.y = 0; }, 150);
+rHand.position.z -= 0.3; rHand.rotation.y = 0.5; setTimeout(() => { rHand.position.z += 0.3; rHand.rotation.y = 0; }, 150);
 playThud(300); raycaster.setFromCamera({ x: 0, y: 0 }, camera);
 const hits = raycaster.intersectObjects(targets);
 if (hits.length > 0 && hits[0].distance < 2.2) {
@@ -1391,7 +1483,7 @@ if (zData && !zData.isDead) { zData.mesh.translateZ(-0.2); applyDamageToZombie(z
 fireCooldown = 0.4;
 }
 if (performance.now() - lastHitTime > 6000 && playerHP < MAX_HP) { playerHP = Math.min(MAX_HP, playerHP + dt * 4); updateHpBar(); }
-if (zombiesToSpawn > 0 && zombies.length < 24) {
+if (zombiesToSpawn > 0 && zombies.length < MAX_ZOMBIES) {
 waveSpawnTimer -= dt;
 if (waveSpawnTimer <= 0) {
 const avail = getAvailableSpawnPoints();
@@ -1401,6 +1493,22 @@ spawnZombie(pt.x + ox, pt.z + oz, 1 + (currentRound * 0.04), 1 + (currentRound *
 zombiesToSpawn--; waveSpawnTimer = 0.5 + Math.random()*1.5;
 }
 }
+// Defensive safety net: nothing in normal play should ever let this happen
+// (spawning is already gated on zombies.length < MAX_ZOMBIES above), but on
+// a very long session this guarantees the alive count can never silently
+// creep past the cap and eat memory/GPU time indefinitely - force-cull the
+// oldest already-dead-but-fading zombies first, then oldest alive ones.
+if (zombies.length > MAX_ZOMBIES) {
+const overflow = zombies.length - MAX_ZOMBIES;
+const cullOrder = zombies.map((z, idx) => idx).sort((a, b) => (zombies[b].isDead - zombies[a].isDead));
+for (let n = 0; n < overflow; n++) {
+const idx = cullOrder[n]; const z = zombies[idx]; if (!z) continue;
+scene.remove(z.mesh); targets = targets.filter(t => t.userData.zData !== z);
+disposeZombieMeshes(z);
+}
+const toRemove = new Set(cullOrder.slice(0, overflow).map(i => zombies[i]));
+for (let i = zombies.length - 1; i >= 0; i--) if (toRemove.has(zombies[i])) zombies.splice(i, 1);
+}
 const px = camera.position.x; const pz = camera.position.z;
 for (let i = zombies.length - 1; i >= 0; i--) {
 const z = zombies[i]; const mesh = z.mesh;
@@ -1409,6 +1517,7 @@ if (mesh.rotation.x > -Math.PI/2) mesh.rotation.x -= dt * 5;
 mesh.position.y -= dt * 1.5;
 if (mesh.position.y < -1.5) {
 scene.remove(mesh); targets = targets.filter(t => t.userData.zData !== z);
+disposeZombieMeshes(z);
 zombies.splice(i, 1);
 }
 continue;
@@ -1468,13 +1577,17 @@ const p = bloodParticles[i]; p.life += dt; p.vel.y -= 9.8 * dt; p.mesh.position.
 p.mesh.material.opacity = Math.max(0, 1 - p.life/p.maxLife);
 if (p.life >= p.maxLife || p.mesh.position.y <= 0) { scene.remove(p.mesh); p.mesh.material.dispose(); bloodParticles.splice(i, 1); }
 }
+flushHud();
 }
 if (gameVisible) renderer.render(scene, camera);
 }
 animate();
 </script>
 <script>
-const firebaseConfig = { apiKey: "AIzaSyATIwEggirk9BmqdbHVLDLkMENQ6McIPCo", authDomain: "untitledzombiegame-af10f.firebaseapp.com", databaseURL: "https://untitledzombiegame-af10f-default-rtdb.firebaseio.com", projectId: "untitledzombiegame-af10f", storageBucket: "untitledzombiegame-af10f.firebasestorage.app", messagingSenderId: "815973880121", appId: "1:815973880121:web:30484e94c8042b551b18e8", measurementId: "G-4GN3G2K4VY" };
+if (!window.FIREBASE_CONFIG) {
+throw new Error('Missing firebase-config.js (or it loaded after this script). Accounts/admin features will not work without it.');
+}
+const firebaseConfig = window.FIREBASE_CONFIG;
 firebase.initializeApp(firebaseConfig);
 const fbDb = firebase.database();
 const ADMIN_USERNAME = "dzvnll";
@@ -1558,10 +1671,22 @@ document.getElementById('mainMenu').style.display = 'none'; document.getElementB
 document.getElementById('adminBackBtn').addEventListener('click', () => {
 document.getElementById('adminMenu').style.display = 'none'; document.getElementById('mainMenu').style.display = 'flex';
 });
-document.getElementById('adminSaveBtn').addEventListener('click', () => {
+document.getElementById('adminSaveBtn').addEventListener('click', async () => {
+const statusEl = document.getElementById('adminStatus');
+if (!currentUser || currentUser.toLowerCase() !== ADMIN_USERNAME.toLowerCase()) {
+statusEl.textContent = 'Not authorized.'; return;
+}
+statusEl.textContent = 'Verifying...';
+try {
+const snap = await fbDb.ref('users/' + usernameToKey(ADMIN_USERNAME)).once('value');
+const rec = snap.val();
+if (!rec || (rec.username || '').toLowerCase() !== currentUser.toLowerCase()) {
+statusEl.textContent = 'Not authorized.'; return;
+}
+} catch (err) { statusEl.textContent = err.message; return; }
 const text = document.getElementById('adminAnnouncementInput').value;
-fbDb.ref('announcement').set(text).then(() => { document.getElementById('adminStatus').textContent = 'Saved.'; })
-.catch(err => { document.getElementById('adminStatus').textContent = err.message; });
+fbDb.ref('announcement').set(text).then(() => { statusEl.textContent = 'Saved.'; })
+.catch(err => { statusEl.textContent = err.message; });
 });
 </script>
 </body>
