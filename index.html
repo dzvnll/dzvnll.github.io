@@ -1050,29 +1050,6 @@ const GUN_IDS = [1, 2, 3, 4, 5, 6];
 // Only the AR and LMG get a second hand under the foregrip; everything else is small
 // enough to run one-handed.
 const TWO_HANDED_IDS = { 3: true, 5: true };
-// vmRightArm's hand mesh was authored around local point (0.315, -0.24, -0.55). Each gun's
-// grip sits somewhere different, so per weapon we shift the whole arm group by the delta
-// between that reference point and the gun's actual grip, instead of using one fixed spot
-// that clips through short guns and floats away from long ones.
-const RIGHT_HAND_REF = { x: 0.315, y: -0.24, z: -0.55 };
-const GRIP_POINTS = {
-0: { x: 0.24, y: -0.26, z: -0.40 },
-1: { x: 0.24, y: -0.26, z: -0.40 },
-2: { x: 0.27, y: -0.27, z: -0.15 },
-3: { x: 0.27, y: -0.27, z: 0.05 },
-4: { x: 0.27, y: -0.26, z: -0.08 },
-5: { x: 0.28, y: -0.27, z: 0.05 },
-6: { x: 0.24, y: -0.28, z: -0.20 }
-};
-function setArmGripDelta(group, ref, point) {
-group.position.set(point.x - ref.x, point.y - ref.y, point.z - ref.z);
-}
-// vmLeftArm's hand mesh was authored around local point (0.05, -0.29, -0.60).
-const LEFT_HAND_REF = { x: 0.05, y: -0.29, z: -0.60 };
-const SUPPORT_POINTS = {
-3: { x: 0.16, y: -0.34, z: -0.68 },
-5: { x: 0.20, y: -0.36, z: -0.82 }
-};
 const raycaster = new THREE.Raycaster();
 const VM_GROUPS = { 0: vmHands, 1: vmPistol, 2: vmShotgun, 3: vmAR, 4: vmSMG, 5: vmLMG, 6: vmMagnum };
 function switchWeapon(id) {
@@ -1080,13 +1057,7 @@ if (isReloading || (id !== 0 && !guns[id].unlocked)) return;
 equipped = id;
 for (let k in VM_GROUPS) { if (k === '0') continue; VM_GROUPS[k].visible = (parseInt(k) === id); }
 vmHands.visible = true;
-setArmGripDelta(vmRightArm, RIGHT_HAND_REF, GRIP_POINTS[id] || GRIP_POINTS[0]);
-if (TWO_HANDED_IDS[id]) {
-vmLeftArm.visible = true;
-setArmGripDelta(vmLeftArm, LEFT_HAND_REF, SUPPORT_POINTS[id]);
-} else {
-vmLeftArm.visible = false;
-}
+vmLeftArm.visible = !!TWO_HANDED_IDS[id];
 document.getElementById('ammo').style.display = id !== 0 ? 'block' : 'none';
 if (currentGameState === STATES.PLAYING) document.getElementById('crosshair').style.display = id !== 0 ? 'block' : 'none';
 updateAmmoUI();
