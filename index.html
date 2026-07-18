@@ -682,24 +682,23 @@ const vmAR = new THREE.Group();
 const vmSMG = new THREE.Group();
 const vmLMG = new THREE.Group();
 const vmMagnum = new THREE.Group();
+const vmRightArm = new THREE.Group();
+const vmLeftArm = new THREE.Group();
 function armSegment(w, h, d, mat, segs) {
-const geo = new THREE.BoxGeometry(w, h, d, segs || 3, segs || 3, segs || 3); mangleGeometry(geo, 0.02);
+const geo = new THREE.BoxGeometry(w, h, d, segs || 1, segs || 1, segs || 1); mangleGeometry(geo, 0.02);
 const m = new THREE.Mesh(geo, mat); m.castShadow = false; return m;
 }
-// Right arm: sleeve running down to a gloved trigger hand, built from several overlapping
-// tapered segments instead of one flat box so it reads as a rounded limb, not a slab.
-const rSleeve = armSegment(0.16, 0.16, 0.30, matPlayerCloth); rSleeve.position.set(0.33, -0.27, -0.06); vmHands.add(rSleeve);
-const rForearm = armSegment(0.135, 0.13, 0.28, matSkin); rForearm.position.set(0.325, -0.265, -0.28); vmHands.add(rForearm);
-const rWrist = armSegment(0.115, 0.11, 0.12, matGlove); rWrist.position.set(0.32, -0.25, -0.46); vmHands.add(rWrist);
-const rHand = armSegment(0.11, 0.095, 0.20, matGlove); rHand.position.set(0.315, -0.235, -0.56); vmHands.add(rHand);
-const rThumb = armSegment(0.035, 0.035, 0.1, matGlove, 2); rThumb.position.set(0.26, -0.20, -0.52); rThumb.rotation.z = 0.5; vmHands.add(rThumb);
-// Left arm: support hand reaching forward under the barrel/foregrip, crossing under the
-// right arm the way a two-handed grip looks in first person.
-const lSleeve = armSegment(0.17, 0.17, 0.28, matPlayerCloth); lSleeve.position.set(-0.06, -0.34, -0.08); vmHands.add(lSleeve);
-const lForearm = armSegment(0.145, 0.14, 0.30, matSkin); lForearm.position.set(-0.01, -0.325, -0.30); vmHands.add(lForearm);
-const lWrist = armSegment(0.125, 0.12, 0.12, matGlove); lWrist.position.set(0.03, -0.305, -0.50); vmHands.add(lWrist);
-const lHand = armSegment(0.12, 0.10, 0.20, matGlove); lHand.position.set(0.06, -0.285, -0.62); vmHands.add(lHand);
-const lThumb = armSegment(0.035, 0.035, 0.1, matGlove, 2); lThumb.position.set(0.12, -0.24, -0.58); lThumb.rotation.z = -0.4; vmHands.add(lThumb);
+// Right arm (trigger hand) - always visible, every weapon needs at least this one.
+// Kept to 3 low-poly segments (sleeve, forearm, hand) instead of 5 to stay cheap to render.
+const rSleeve = armSegment(0.16, 0.16, 0.34, matPlayerCloth); rSleeve.position.set(0.33, -0.27, -0.10); vmRightArm.add(rSleeve);
+const rForearm = armSegment(0.13, 0.12, 0.30, matSkin); rForearm.position.set(0.32, -0.255, -0.34); vmRightArm.add(rForearm);
+const rHand = armSegment(0.11, 0.095, 0.22, matGlove); rHand.position.set(0.315, -0.24, -0.55); vmRightArm.add(rHand);
+// Left arm (support hand under the barrel/foregrip) - only shown for two-handed weapons.
+const lSleeve = armSegment(0.17, 0.17, 0.32, matPlayerCloth); lSleeve.position.set(-0.06, -0.34, -0.12); vmLeftArm.add(lSleeve);
+const lForearm = armSegment(0.14, 0.13, 0.32, matSkin); lForearm.position.set(-0.01, -0.32, -0.38); vmLeftArm.add(lForearm);
+const lHand = armSegment(0.12, 0.10, 0.22, matGlove); lHand.position.set(0.05, -0.29, -0.60); vmLeftArm.add(lHand);
+vmHands.add(vmRightArm); vmHands.add(vmLeftArm);
+vmLeftArm.visible = false;
 const pSlide = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.22), matGunMetal); pSlide.position.set(0.22, -0.21, -0.45); vmPistol.add(pSlide);
 const pGrip = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.11, 0.05), matGunMetal); pGrip.position.set(0.22, -0.27, -0.38); pGrip.rotation.x = 0.2; vmPistol.add(pGrip);
 const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 1.0), matGunMetal); barrel.position.set(0.25, -0.22, -0.6); vmShotgun.add(barrel);
@@ -1048,6 +1047,7 @@ const guns = {
 6: { id: 6, name: "Magnum", ammo: 6, res: 36, max: 6, maxRes: 60, dmg: 90, pellets: 1, auto: false, reloadTime: 1400, unlocked: false, cooldown: 0.45, recoil: 0.05, sound: 'magnum' }
 };
 const GUN_IDS = [1, 2, 3, 4, 5, 6];
+const TWO_HANDED_IDS = { 2: true, 3: true, 4: true, 5: true };
 const raycaster = new THREE.Raycaster();
 const VM_GROUPS = { 0: vmHands, 1: vmPistol, 2: vmShotgun, 3: vmAR, 4: vmSMG, 5: vmLMG, 6: vmMagnum };
 function switchWeapon(id) {
@@ -1055,6 +1055,7 @@ if (isReloading || (id !== 0 && !guns[id].unlocked)) return;
 equipped = id;
 for (let k in VM_GROUPS) { if (k === '0') continue; VM_GROUPS[k].visible = (parseInt(k) === id); }
 vmHands.visible = true;
+vmLeftArm.visible = !!TWO_HANDED_IDS[id];
 document.getElementById('ammo').style.display = id !== 0 ? 'block' : 'none';
 if (currentGameState === STATES.PLAYING) document.getElementById('crosshair').style.display = id !== 0 ? 'block' : 'none';
 updateAmmoUI();
