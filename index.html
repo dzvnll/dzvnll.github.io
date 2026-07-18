@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1581,6 +1580,20 @@ flushHud();
 }
 if (gameVisible) renderer.render(scene, camera);
 }
+// Sync initial state (weapon viewmodel visibility, HUD points/ammo/hp text) before
+// the very first frame. Without this, switchWeapon() never runs prior to the
+// player's first "Start" click, so every weapon viewmodel defaults to Three.js's
+// visible=true and all six guns render stacked on top of each other in view, and
+// the HUD keeps showing its static HTML placeholder text (250 pts, 12/40 ammo)
+// instead of the real starting values (500 pts, 12/60 ammo) until the first
+// shot/kill/purchase happens to flip a hudDirty flag.
+// Deliberately NOT calling resetGame() here: it also tops every gun's reserve
+// ammo up to guns[id].maxRes, which would silently hand the player double
+// starting reserve ammo (e.g. pistol 60 -> 120) on their very first spawn.
+switchWeapon(equipped);
+hudDirty.points = true;
+updateHpBar();
+flushHud();
 animate();
 </script>
 <script>
