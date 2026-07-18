@@ -35,6 +35,16 @@ text-align: center; opacity: 0; transition: opacity 0.2s; white-space: nowrap;
 bottom: 20px; left: 50%; transform: translateX(-50%); width: calc(300px * var(--hud-scale)); height: calc(24px * var(--hud-scale));
 border: 3px solid #000; background: rgba(40,0,0,0.7);
 }
+#hpNumber {
+bottom: calc(48px * var(--hud-scale)); left: 50%; transform: translateX(-50%); font-size: calc(26px * var(--hud-scale)); color: #fff; text-align: center;
+}
+#invBar { position: absolute; bottom: calc(190px * var(--hud-scale)); left: 50%; transform: translateX(-50%); display: flex; gap: calc(10px * var(--hud-scale)); }
+.inv-slot { position: relative; width: calc(52px * var(--hud-scale)); height: calc(52px * var(--hud-scale)); background: rgba(20,0,0,0.75); border: 2px solid #4a0000; display: flex; align-items: center; justify-content: center; transition: box-shadow 0.2s, border-color 0.2s; }
+.inv-slot.empty { opacity: 0.32; }
+.inv-slot.active { border-color: #ff2222; box-shadow: 0 0 10px 2px rgba(255,30,30,0.6); }
+.inv-key { position: absolute; top: 2px; left: 4px; font-family: 'VT323', monospace; font-size: calc(14px * var(--hud-scale)); color: #ffcc00; text-shadow: 1px 1px 0 #000; }
+.inv-icon { width: 78%; height: 58%; }
+.inv-icon svg { width: 100%; height: 100%; display: block; }
 #hpFill { position:absolute; top:0; left:0; bottom:0; width:100%; background:#a30000; transition: width 0.2s; }
 #dmgVignette { position:fixed; inset:0; box-shadow: inset 0 0 150px 40px rgba(150,0,0,0.9); opacity: 0; transition: opacity 0.15s; pointer-events:none; z-index: 9; }
 #crosshair { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(var(--hud-scale)); z-index: 15; pointer-events: none; display: none; }
@@ -90,7 +100,14 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 <div class="hud-text" id="ammo"><span id="ammoCurrent">12</span> / <span id="ammoReserve" style="color:#888">40</span></div>
 <div class="hud-text" id="promptText">[E] - 750</div>
 <div class="hud-text" id="safeNotice" style="top:30px; left:50%; transform:translateX(-50%); font-size:28px; color:#66ff66; text-align:center; white-space:nowrap; opacity:0; transition:opacity 0.2s;"></div>
+<div class="hud-text" id="hpNumber">100</div>
 <div id="hpWrap" class="hud-text"><div id="hpFill"></div></div>
+<div id="invBar" class="hud-text">
+<div class="inv-slot empty" id="invSlot0"><span class="inv-key">1</span><div class="inv-icon" id="invIcon0"></div></div>
+<div class="inv-slot empty" id="invSlot1"><span class="inv-key">2</span><div class="inv-icon" id="invIcon1"></div></div>
+<div class="inv-slot empty" id="invSlot2"><span class="inv-key">3</span><div class="inv-icon" id="invIcon2"></div></div>
+<div class="inv-slot empty" id="invSlot3"><span class="inv-key">4</span><div class="inv-icon" id="invIcon3"></div></div>
+</div>
 </div>
 <div id="dmgVignette"></div>
 <div id="crosshair"></div>
@@ -740,7 +757,24 @@ const lForearm = armSegment(0.14, 0.13, 0.32, matSkin); lForearm.position.set(-0
 const lHand = armSegment(0.12, 0.10, 0.22, matGlove); lHand.position.set(0.05, -0.29, -0.60); vmLeftArm.add(lHand);
 vmHands.add(vmRightArm); vmHands.add(vmLeftArm);
 vmLeftArm.visible = false;
-const pSlide = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.22), matGunMetal); pSlide.position.set(0.22, -0.16, -0.45); vmPistol.add(pSlide);
+// Knife - a low-poly 4-sided pyramid gives it a distinct tapered, pointed blade
+// silhouette (rather than the bare fist standing in for a weapon), plus a small
+// dark handle block. Attached to rHand so it inherits the hand's position and the
+// melee swing animation for free; toggled visible only while the knife is equipped.
+const knifeGroup = new THREE.Group();
+const knifeHandle = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.05, 0.13), matGlove);
+knifeHandle.position.set(0, 0, 0.03);
+knifeGroup.add(knifeHandle);
+const knifeBladeGeo = new THREE.ConeGeometry(0.045, 0.26, 4);
+knifeBladeGeo.rotateX(-Math.PI / 2); // point the apex forward (-Z) instead of up (+Y)
+const knifeBlade = new THREE.Mesh(knifeBladeGeo, matGunMetal);
+knifeBlade.scale.set(0.28, 1, 1); // flatten sideways so it reads as a thin blade, not a spike
+knifeBlade.position.set(0, 0, -0.165);
+knifeGroup.add(knifeBlade);
+knifeGroup.position.set(0, 0.04, -0.16);
+knifeGroup.rotation.set(-0.05, 0, -0.08);
+rHand.add(knifeGroup);
+const pSlide = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.22), matGunMetal); pSlide.position.set(0.22, -0.21, -0.45); vmPistol.add(pSlide);
 const pGrip = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.11, 0.05), matGunMetal); pGrip.position.set(0.22, -0.27, -0.38); pGrip.rotation.x = 0.2; vmPistol.add(pGrip);
 const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 1.0), matGunMetal); barrel.position.set(0.25, -0.22, -0.6); vmShotgun.add(barrel);
 const magTube = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.8), matGunMetal); magTube.position.set(0.25, -0.26, -0.5); vmShotgun.add(magTube);
@@ -750,7 +784,7 @@ const stock = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.14, 0.35), matGunWood
 const arBody = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.6), matGunMetal); arBody.position.set(0.25, -0.25, -0.3); vmAR.add(arBody);
 const arMag = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.19, 0.1), matGunMetal); arMag.position.set(0.25, -0.38, -0.2); arMag.rotation.x = -0.15; vmAR.add(arMag);
 const arBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.5), matGunMetal); arBarrel.position.set(0.25, -0.22, -0.8); vmAR.add(arBarrel);
-const arStock = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, 0.28), matGunMetal); arStock.position.set(0.25, -0.25, -0.05); vmAR.add(arStock);
+const arStock = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, 0.28), matGunMetal); arStock.position.set(0.25, -0.25, 0.15); vmAR.add(arStock);
 const smgBody = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.11, 0.42), matGunMetal); smgBody.position.set(0.25, -0.24, -0.2); vmSMG.add(smgBody);
 const smgMag = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.24, 0.06), matGunMetal); smgMag.position.set(0.25, -0.4, -0.15); smgMag.rotation.x = -0.2; vmSMG.add(smgMag);
 const smgBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, 0.3), matGunMetal); smgBarrel.position.set(0.25, -0.21, -0.55); vmSMG.add(smgBarrel);
@@ -760,12 +794,17 @@ const lmgDrum = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.06, 10),
 const lmgBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.55), matGunMetal); lmgBarrel.position.set(0.26, -0.21, -0.9); vmLMG.add(lmgBarrel);
 const lmgBipodL = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.18, 0.02), matGunMetal); lmgBipodL.position.set(0.19, -0.32, -0.75); lmgBipodL.rotation.z = 0.25; vmLMG.add(lmgBipodL);
 const lmgBipodR = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.18, 0.02), matGunMetal); lmgBipodR.position.set(0.33, -0.32, -0.75); lmgBipodR.rotation.z = -0.25; vmLMG.add(lmgBipodR);
-const lmgStock = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.3), matGunWood); lmgStock.position.set(0.26, -0.27, -0.05); vmLMG.add(lmgStock);
+const lmgStock = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.3), matGunWood); lmgStock.position.set(0.26, -0.27, 0.15); vmLMG.add(lmgStock);
 const magBody = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.09, 0.14), matGunMetal); magBody.position.set(0.22, -0.22, -0.3); vmMagnum.add(magBody);
 const magCylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.06, 10), matGunMetal); magCylinder.rotation.z = Math.PI/2; magCylinder.position.set(0.22, -0.22, -0.24); vmMagnum.add(magCylinder);
 const magBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.4), matGunMetal); magBarrel.position.set(0.22, -0.22, -0.55); vmMagnum.add(magBarrel);
 const magGrip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.13, 0.06), matGunWood); magGrip.position.set(0.22, -0.3, -0.14); magGrip.rotation.x = 0.25; vmMagnum.add(magGrip);
-const HAND_POS = { x: 0.315, y: -0.24, z: -0.55 };
+// Previously this matched rHand's own center exactly, so every gun's grip mesh sat
+// dead-center inside the hand box - since both are solid boxes centered on the same
+// point, they fully overlapped/clipped into each other. Anchoring near the hand's
+// front tip instead (rHand is 0.22 deep, centered at z -0.55) lets the grip sit just
+// inside the fingers instead of buried in the middle of the fist.
+const HAND_POS = { x: 0.315, y: -0.24, z: -0.63 };
 function anchorToHand(group, gripMesh) {
 group.position.set(HAND_POS.x - gripMesh.position.x, HAND_POS.y - gripMesh.position.y, HAND_POS.z - gripMesh.position.z);
 }
@@ -775,17 +814,20 @@ anchorToHand(vmAR, arBody);
 anchorToHand(vmSMG, smgBody);
 anchorToHand(vmLMG, lmgBody);
 anchorToHand(vmMagnum, magGrip);
+// Muzzle/flash/light positions are hand-tuned absolute offsets (not derived from
+// HAND_POS), so they're nudged forward by the same 0.08 the grip anchor moved to
+// keep the muzzle flash lined up with each barrel tip.
 const MUZZLE_LOCAL = {
-1: { x: 0.22, y: -0.21, z: -0.56 },
-2: { x: 0.25, y: -0.22, z: -1.1 },
-3: { x: 0.25, y: -0.22, z: -1.05 },
-4: { x: 0.25, y: -0.21, z: -0.7 },
-5: { x: 0.26, y: -0.21, z: -1.175 },
-6: { x: 0.22, y: -0.22, z: -0.75 }
+1: { x: 0.22, y: -0.21, z: -0.64 },
+2: { x: 0.25, y: -0.22, z: -1.18 },
+3: { x: 0.25, y: -0.22, z: -1.13 },
+4: { x: 0.25, y: -0.21, z: -0.78 },
+5: { x: 0.26, y: -0.21, z: -1.255 },
+6: { x: 0.22, y: -0.22, z: -0.83 }
 };
 const flash = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6), new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, side: THREE.DoubleSide }));
-flash.position.set(0.30, -0.22, -0.56); flash.visible = false; viewmodel.add(flash);
-const muzzleLight = new THREE.PointLight(0xffaa33, 0, 6); muzzleLight.position.set(0.30, -0.22, -0.56); viewmodel.add(muzzleLight);
+flash.position.set(0.30, -0.22, -0.64); flash.visible = false; viewmodel.add(flash);
+const muzzleLight = new THREE.PointLight(0xffaa33, 0, 6); muzzleLight.position.set(0.30, -0.22, -0.64); viewmodel.add(muzzleLight);
 viewmodel.add(vmHands); viewmodel.add(vmPistol); viewmodel.add(vmShotgun); viewmodel.add(vmAR);
 viewmodel.add(vmSMG); viewmodel.add(vmLMG); viewmodel.add(vmMagnum);
 viewmodel.scale.set(1.3, 1.3, 1.3);
@@ -879,7 +921,7 @@ mangleGeometry(shoulderGeo, 0.04);
 const shoulders = new THREE.Mesh(shoulderGeo, mUniform); shoulders.castShadow = true; shoulders.receiveShadow = true; torso.add(shoulders);
 const neck = makeOrganicLimb(0.075, 0.095, 0.13, mFace, -0.07); neck.position.y = 0.34; torso.add(neck);
 const headGeo = new THREE.SphereGeometry(0.19, 14, 14); headGeo.scale(0.92, 1.08, 0.95); headGeo.translate(0, 0.15, 0); mangleGeometry(headGeo, 0.04);
-const head = new THREE.Mesh(headGeo, mFace); head.position.y = 0.44; head.castShadow = true; torso.add(head);
+const head = new THREE.Mesh(headGeo, mFace); head.position.y = 0.44; head.castShadow = true; head.userData.isHead = true; torso.add(head);
 const jawGeo = new THREE.BoxGeometry(0.11, 0.07, 0.1); mangleGeometry(jawGeo, 0.015);
 const jaw = new THREE.Mesh(jawGeo, mFace); jaw.position.set(0, 0.32, 0.09); jaw.rotation.x = 0.5 + Math.random()*0.3; jaw.castShadow = true; torso.add(jaw);
 // Leaner upper/lower segments (slimmer taper) so limbs read as arms/legs rather than
@@ -952,7 +994,7 @@ if (armL) parts.push(...armL.meshes);
 if (armR) parts.push(...armR.meshes);
 if (legL) parts.push(...legL.meshes);
 if (legR) parts.push(...legR.meshes);
-const baseHp = 80 + (currentRound * 18);
+const baseHp = 92 + (currentRound * 18); // ~120 HP for a standard zombie at round 1, scaling up each round as before
 const baseSpeed = 2.0;
 const data = { 
 mesh: zGroup, parts: parts, animParts: animParts, hp: baseHp * hpMult * varHp, 
@@ -963,6 +1005,13 @@ torsoBaseY: torsoBaseY,
 // Which limbs are currently attached, and (for the ones that started attached) what
 // they're parented to and which meshes belong to them - needed to sever one on the fly.
 limbs: { aL: hasLeftArm, aR: hasRightArm, lL: hasLeftLeg, lR: hasRightLeg },
+// Counts hits landed on each limb so a limb is severed after a fixed number of
+// hits/stabs (see LIMB_HITS_TO_SEVER) rather than a random chance per hit.
+limbHitCounts: { aL: 0, aR: 0, lL: 0, lR: 0 },
+// Which arm this zombie leads with when attacking - the other arm stays lowered
+// completely during an attack. Falls back to whichever arm is still attached if
+// this one gets shot off (see getAttackArm below).
+attackArm: (hasLeftArm && hasRightArm) ? (Math.random() < 0.5 ? 'aL' : 'aR') : (hasLeftArm ? 'aL' : (hasRightArm ? 'aR' : null)),
 limbInfo: {
 aL: armL ? { parent: torso, group: armL.group, meshes: armL.meshes } : null,
 aR: armR ? { parent: torso, group: armR.group, meshes: armR.meshes } : null,
@@ -1003,7 +1052,7 @@ waveSpawnTimer = 0.5;
 zombiesToSpawn = Math.min(MAX_ZOMBIES_PER_WAVE, Math.floor(5 + Math.pow(currentRound, 1.15) * 1.8));
 zombiesAlive = zombiesToSpawn;
 }
-let playerHP = 110; const MAX_HP = 110; let lastHitTime = 0;
+let playerHP = 100; const MAX_HP = 100; let lastHitTime = 0;
 const ZOMBIE_ATTACK_GRACE_MS = 10000; let zombieAttacksDisabledUntil = 0;
 function updateHpBar() { hudDirty.hp = true; }
 function damagePlayer(amount) {
@@ -1033,6 +1082,7 @@ bloodParticles.forEach(p => { scene.remove(p.mesh); p.mesh.material.dispose(); }
 bloodDecals.forEach(d => { clearTimeout(d.timer); scene.remove(d.mesh); d.mesh.geometry.dispose(); d.mesh.material.dispose(); });
 bloodDecals.length = 0;
 currentRound = 1; zombiesAlive = 0; zombiesToSpawn = 0; waveSpawnTimer = 0; pts = 500; playerHP = MAX_HP;
+inventory = [0, 1, null, null];
 GUN_IDS.forEach(id => {
 guns[id].ammo = guns[id].max; guns[id].res = guns[id].maxRes;
 if (id !== 1) guns[id].unlocked = false;
@@ -1166,13 +1216,10 @@ if (currentGameState === STATES.PLAYING) {
 keys[e.code] = true;
 if (e.code === 'Space' && isGrounded) jump();
 if (e.code === 'KeyR' && equipped !== 0) initiateReload();
-if (e.code === 'Digit1') switchWeapon(0);
-if (e.code === 'Digit2') switchWeapon(1);
-if (e.code === 'Digit3') switchWeapon(2);
-if (e.code === 'Digit4') switchWeapon(3);
-if (e.code === 'Digit5') switchWeapon(4);
-if (e.code === 'Digit6') switchWeapon(5);
-if (e.code === 'Digit7') switchWeapon(6);
+if (e.code === 'Digit1') selectInventorySlot(0);
+if (e.code === 'Digit2') selectInventorySlot(1);
+if (e.code === 'Digit3') selectInventorySlot(2);
+if (e.code === 'Digit4') selectInventorySlot(3);
 if (e.code === 'KeyE') tryInteract();
 }
 });
@@ -1196,6 +1243,16 @@ isAiming = false;
 }
 });
 document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('wheel', e => {
+if (currentGameState !== STATES.PLAYING) return;
+e.preventDefault();
+const filled = inventory.filter(id => id != null);
+if (filled.length <= 1) return;
+let idx = filled.indexOf(equipped);
+if (idx === -1) idx = 0;
+idx = (idx + (e.deltaY > 0 ? 1 : -1) + filled.length) % filled.length;
+switchWeapon(filled[idx]);
+}, { passive: false });
 // points/ammo/hp used to be written straight to the DOM (innerText/style.width)
 // inside high-frequency functions like fireGun(), applyDamageToZombie(), and the
 // passive-regen branch of the main loop (that last one wrote hpFill's style every
@@ -1212,11 +1269,15 @@ document.getElementById('ammoCurrent').innerText = guns[equipped].ammo;
 document.getElementById('ammoReserve').innerText = guns[equipped].res;
 hudDirty.ammo = false;
 }
-if (hudDirty.hp) { document.getElementById('hpFill').style.width = Math.max(0, playerHP) + '%'; hudDirty.hp = false; }
+if (hudDirty.hp) {
+document.getElementById('hpFill').style.width = Math.max(0, (playerHP / MAX_HP) * 100) + '%';
+document.getElementById('hpNumber').innerText = Math.max(0, Math.round(playerHP));
+hudDirty.hp = false;
+}
 }
 let pts = 500; let isReloading = false; let equipped = 1;
 const guns = {
-0: { id: 0, unlocked: true },
+0: { id: 0, name: "Knife", unlocked: true },
 1: { id: 1, name: "Pistol", ammo: 12, res: 60, max: 12, maxRes: 120, dmg: 35, pellets: 1, auto: false, reloadTime: 700, unlocked: true, cooldown: 0.22, recoil: 0.01, sound: 'pistol' },
 2: { id: 2, name: "Shotgun", ammo: 8, res: 40, max: 8, maxRes: 40, dmg: 26, pellets: 7, auto: false, reloadTime: 1000, unlocked: false, cooldown: 0.5, recoil: 0.03, sound: 'shotgun' },
 3: { id: 3, name: "AR", ammo: 35, res: 180, max: 35, maxRes: 300, dmg: 40, pellets: 1, auto: true, reloadTime: 1200, unlocked: false, cooldown: 0.12, recoil: 0.015, sound: 'ar' },
@@ -1225,6 +1286,39 @@ const guns = {
 6: { id: 6, name: "Magnum", ammo: 6, res: 36, max: 6, maxRes: 60, dmg: 90, pellets: 1, auto: false, reloadTime: 1400, unlocked: false, cooldown: 0.45, recoil: 0.05, sound: 'magnum' }
 };
 const GUN_IDS = [1, 2, 3, 4, 5, 6];
+// Simple flat silhouette icons for the inventory boxes, one per weapon id.
+const WEAPON_ICON_SVG = {
+0: `<svg viewBox="0 0 40 24"><rect x="4" y="13" width="9" height="7" fill="#2c2620"/><polygon points="13,15 33,10 35,12 15,18" fill="#d8dde0"/></svg>`,
+1: `<svg viewBox="0 0 40 24"><rect x="10" y="7" width="19" height="5" fill="#8a8a8a"/><rect x="12" y="12" width="5" height="9" fill="#5c5c5c"/></svg>`,
+2: `<svg viewBox="0 0 40 24"><rect x="4" y="9" width="27" height="4" fill="#8a8a8a"/><rect x="27" y="8" width="8" height="3" fill="#8a6236"/><rect x="6" y="13" width="4" height="8" fill="#8a6236"/></svg>`,
+3: `<svg viewBox="0 0 40 24"><rect x="4" y="9" width="29" height="4" fill="#8a8a8a"/><rect x="8" y="13" width="4" height="9" fill="#5c5c5c"/><rect x="30" y="6" width="6" height="4" fill="#5c5c5c"/><rect x="2" y="10" width="6" height="2" fill="#8a8a8a"/></svg>`,
+4: `<svg viewBox="0 0 40 24"><rect x="8" y="10" width="21" height="4" fill="#8a8a8a"/><rect x="12" y="14" width="4" height="8" fill="#5c5c5c"/><rect x="27" y="8" width="5" height="3" fill="#5c5c5c"/></svg>`,
+5: `<svg viewBox="0 0 40 24"><rect x="2" y="9" width="31" height="4" fill="#8a8a8a"/><circle cx="15" cy="16" r="4" fill="#5c5c5c"/><rect x="31" y="7" width="6" height="3" fill="#5c5c5c"/></svg>`,
+6: `<svg viewBox="0 0 40 24"><rect x="12" y="9" width="17" height="4" fill="#8a8a8a"/><circle cx="16" cy="11" r="3" fill="#5c5c5c"/><rect x="12" y="13" width="4" height="9" fill="#8a6236"/></svg>`
+};
+// 4-slot inventory: knife and pistol are permanent (slots 0 & 1); slots 2 & 3 hold
+// up to two extra guns bought from wallbuys. Number keys 1-4 and mouse scroll swap
+// between whatever's currently filled in.
+let inventory = [0, 1, null, null];
+function updateInventoryUI() {
+for (let i = 0; i < 4; i++) {
+const slotEl = document.getElementById('invSlot' + i);
+const iconEl = document.getElementById('invIcon' + i);
+if (!slotEl) continue;
+const wid = inventory[i];
+if (wid == null) {
+slotEl.classList.add('empty'); slotEl.classList.remove('active'); iconEl.innerHTML = '';
+} else {
+slotEl.classList.remove('empty');
+iconEl.innerHTML = WEAPON_ICON_SVG[wid] || '';
+slotEl.classList.toggle('active', wid === equipped);
+}
+}
+}
+function selectInventorySlot(i) {
+const id = inventory[i];
+if (id != null) switchWeapon(id);
+}
 // Only the AR and LMG get a second hand under the foregrip; everything else is small
 // enough to run one-handed.
 const TWO_HANDED_IDS = { 3: true, 5: true };
@@ -1236,9 +1330,11 @@ equipped = id;
 for (let k in VM_GROUPS) { if (k === '0') continue; VM_GROUPS[k].visible = (parseInt(k) === id); }
 vmHands.visible = true;
 vmLeftArm.visible = !!TWO_HANDED_IDS[id];
+knifeGroup.visible = (id === 0);
 document.getElementById('ammo').style.display = id !== 0 ? 'block' : 'none';
 if (currentGameState === STATES.PLAYING) document.getElementById('crosshair').style.display = id !== 0 ? 'block' : 'none';
 updateAmmoUI();
+updateInventoryUI();
 }
 function updateAmmoUI() {
 if (equipped === 0) return;
@@ -1283,6 +1379,20 @@ mat.dispose();
 }
 });
 }
+// Returns the limb key of the arm a zombie should currently attack with. Prefers its
+// spawn-assigned dominant arm; falls back to whichever arm is still attached if that
+// one has since been shot off. Returns null if both arms are gone.
+function getAttackArm(zData) {
+if (zData.attackArm && zData.limbs[zData.attackArm]) return zData.attackArm;
+if (zData.limbs.aR) return 'aR';
+if (zData.limbs.aL) return 'aL';
+return null;
+}
+// Number of hits/stabs required to sever a limb, per weapon (indexed by weapon id;
+// 0 is the knife/melee). Chosen to match: knife 3 stabs, pistol 3 shots, shotgun 1 shot,
+// with the rest scaled by relative weapon power.
+const LIMB_HITS_TO_SEVER = { 0: 3, 1: 3, 2: 1, 3: 2, 4: 4, 5: 2, 6: 1 };
+const HEADSHOT_MULTIPLIER = 2.5;
 // Removes an attached limb (arm or leg), leaving its shoulder/hip socket ball exposed as
 // a bloody stump. Safe to call on a limb that's already missing (spawned without it, or
 // already shot off) - it just does nothing.
@@ -1298,6 +1408,7 @@ mesh.geometry.dispose();
 }
 zData.limbs[limbKey] = false;
 zData.animParts[limbKey] = null;
+zData.limbHitCounts[limbKey] = 0;
 spawnBlood(hitPoint || zData.mesh.position.clone().setY(zData.torsoBaseY), 10, 2.8);
 // Losing both legs drops the zombie into a crawl - same posture/speed a zombie that
 // spawned legless already uses.
@@ -1306,15 +1417,16 @@ zData.isCrawler = true; zData.speed *= 0.55; zData.torsoBaseY = 0.42;
 zData.animParts.torso.rotation.x = 0.35;
 }
 }
-function applyDamageToZombie(zData, dmg, hitPoint, limbHit) {
+function applyDamageToZombie(zData, dmg, hitPoint, limbHit, weaponId) {
 if (!zData || zData.isDead) return;
 zData.hp -= dmg; pts += 10; hudDirty.points = true;
 if (hitPoint) spawnBlood(hitPoint, 5, 2.2);
 zData.parts.forEach(p => { p.material.color.setHex(0xff0000); });
 setTimeout(() => { if (!zData.isDead) zData.parts.forEach(p => { p.material.color.setHex(0xffffff); }); }, 100);
 if (limbHit && zData.limbs[limbHit]) {
-const severChance = Math.min(0.9, 0.1 + dmg * 0.006);
-if (Math.random() < severChance) severLimb(zData, limbHit, hitPoint);
+zData.limbHitCounts[limbHit] = (zData.limbHitCounts[limbHit] || 0) + 1;
+const needed = LIMB_HITS_TO_SEVER[weaponId] ?? 3;
+if (zData.limbHitCounts[limbHit] >= needed) severLimb(zData, limbHit, hitPoint);
 }
 if (zData.hp <= 0) {
 zData.isDead = true; pts += 60; hudDirty.points = true;
@@ -1333,8 +1445,8 @@ function fireGun() {
 if (isReloading || guns[equipped].ammo <= 0) { if (guns[equipped].ammo === 0) initiateReload(); return; }
 guns[equipped].ammo--; updateAmmoUI();
 playShot(guns[equipped].sound); pitch += isAiming ? guns[equipped].recoil * 0.5 : guns[equipped].recoil;
-viewmodel.position.z += isAiming ? 0.03 : 0.06;
-setTimeout(() => { viewmodel.position.z -= isAiming ? 0.03 : 0.06; }, 100);
+viewmodel.position.z += isAiming ? 0.08 : 0.18;
+setTimeout(() => { viewmodel.position.z -= isAiming ? 0.08 : 0.18; }, 100);
 const mz = MUZZLE_LOCAL[equipped] || MUZZLE_LOCAL[1];
 const mzGrp = VM_GROUPS[equipped].position;
 flash.position.set(mzGrp.x + mz.x, mzGrp.y + mz.y, mzGrp.z + mz.z);
@@ -1352,7 +1464,8 @@ if (hits.length > 0) {
 const hitObj = hits[0].object; const zData = hitObj.userData.zData;
 if (zData && !zData.isDead) {
 if (!hitTotals.has(zData)) hitTotals.set(zData, { dmg: 0, point: hits[0].point, limbHits: {} });
-const info = hitTotals.get(zData); info.dmg += PELLET_DAMAGE;
+const info = hitTotals.get(zData);
+info.dmg += hitObj.userData.isHead ? PELLET_DAMAGE * HEADSHOT_MULTIPLIER : PELLET_DAMAGE;
 const limb = hitObj.userData.limb;
 if (limb) info.limbHits[limb] = (info.limbHits[limb] || 0) + 1;
 }
@@ -1362,7 +1475,7 @@ hitTotals.forEach((info, zData) => {
 zData.mesh.translateZ(guns[equipped].auto ? -0.1 : -0.4);
 let topLimb = null, topCount = 0;
 for (const k in info.limbHits) { if (info.limbHits[k] > topCount) { topLimb = k; topCount = info.limbHits[k]; } }
-applyDamageToZombie(zData, info.dmg, info.point, topLimb);
+applyDamageToZombie(zData, info.dmg, info.point, topLimb, equipped);
 });
 fireCooldown = guns[equipped].cooldown;
 }
@@ -1386,7 +1499,16 @@ if (door) { tryOpenDoor(door); return; }
 const wb = getNearestWallbuy();
 if (wb) {
 if (!guns[wb.id].unlocked && pts >= wb.cost) {
-pts -= wb.cost; guns[wb.id].unlocked = true; switchWeapon(wb.id); playChime();
+pts -= wb.cost; guns[wb.id].unlocked = true;
+// Slots 0 & 1 (knife, pistol) are permanent. Slots 2 & 3 hold extra guns - fill
+// whichever is empty first, and once both are full, buying a new gun bumps out
+// whichever of the two isn't currently equipped (so you don't lose the gun in
+// your hand) to keep the inventory capped at 4.
+let slotIdx = (inventory[2] == null) ? 2 : (inventory[3] == null ? 3 : (equipped === inventory[3] ? 2 : 3));
+const displaced = inventory[slotIdx];
+if (displaced != null) guns[displaced].unlocked = false;
+inventory[slotIdx] = wb.id;
+switchWeapon(wb.id); playChime();
 } else if (guns[wb.id].unlocked && pts >= wb.ammoCost && guns[wb.id].res < guns[wb.id].maxRes) {
 pts -= wb.ammoCost; guns[wb.id].res = guns[wb.id].maxRes; updateAmmoUI(); playChime();
 }
@@ -1477,7 +1599,11 @@ playThud(300); raycaster.setFromCamera({ x: 0, y: 0 }, camera);
 const hits = raycaster.intersectObjects(targets);
 if (hits.length > 0 && hits[0].distance < 2.2) {
 const zData = hits[0].object.userData.zData;
-if (zData && !zData.isDead) { zData.mesh.translateZ(-0.2); applyDamageToZombie(zData, 60, hits[0].point, hits[0].object.userData.limb); }
+if (zData && !zData.isDead) {
+zData.mesh.translateZ(-0.2);
+const meleeDmg = hits[0].object.userData.isHead ? 60 * HEADSHOT_MULTIPLIER : 60;
+applyDamageToZombie(zData, meleeDmg, hits[0].point, hits[0].object.userData.limb, equipped);
+}
 }
 fireCooldown = 0.4;
 }
@@ -1561,10 +1687,16 @@ if (!checkCol(mesh.position.x, mesh.position.z + sz)) mesh.position.z += sz;
 z.animTime += dt * (12 * (z.speed/2.1));
 if (lL) lL.rotation.x = Math.sin(z.animTime) * 1.0; if (lR) lR.rotation.x = Math.sin(z.animTime + Math.PI) * 1.0;
 if (aL) aL.rotation.x = -Math.PI/2 + 0.2 + Math.sin(z.animTime*0.5)*0.1; if (aR) aR.rotation.x = -Math.PI/2 + 0.2 + Math.sin(z.animTime*0.5 + Math.PI)*0.1;
-torso.position.y = z.torsoBaseY + Math.abs(Math.sin(z.animTime)) * 0.15; torso.rotation.z = Math.sin(z.animTime*0.5) * 0.1;
+torso.position.y = z.torsoBaseY + Math.abs(Math.sin(z.animTime)) * (z.isCrawler ? 0.02 : 0.15); torso.rotation.z = Math.sin(z.animTime*0.5) * 0.1;
 } else {
 mesh.lookAt(px, 0, pz); z.animTime += dt * 8;
-if (aL) aL.rotation.x = -Math.PI/2 + Math.sin(z.animTime) * 0.6; if (aR) aR.rotation.x = -Math.PI/2 + Math.sin(z.animTime + Math.PI) * 0.6;
+// Reset torso height explicitly on entering the attack branch (rather than leaving
+// whatever bob height the walk cycle last left it at) so a legless zombie stays flat
+// on the ground while it attacks instead of appearing to hover.
+torso.position.y = z.torsoBaseY + (z.isCrawler ? 0 : 0.05);
+const atkArm = getAttackArm(z);
+if (aL) aL.rotation.x = (atkArm === 'aL') ? -Math.PI/2 + Math.sin(z.animTime) * 0.6 : 0;
+if (aR) aR.rotation.x = (atkArm === 'aR') ? -Math.PI/2 + Math.sin(z.animTime) * 0.6 : 0;
 if (z.attackCd <= 0) {
 z.attackCd = 1.0;
 if (performance.now() >= zombieAttacksDisabledUntil) damagePlayer(z.dmg);
