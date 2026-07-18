@@ -168,8 +168,13 @@ var hasVariety = available.some(function(track) { return track !== available[0];
 if (hasVariety) { while (available[idx] === lastMusicTrack) idx = Math.floor(Math.random() * available.length); }
 lastMusicTrack = available[idx];
 bgMusic.src = available[idx];
-bgMusic.play().catch(function(){});
+bgMusic.play().catch(function(err){ console.warn('[music] play() failed for', available[idx], '-', err.message); });
 }
+bgMusic.addEventListener('error', function() {
+var mediaErr = bgMusic.error;
+var codes = { 1: 'ABORTED', 2: 'NETWORK', 3: 'DECODE (file loaded but is not valid audio - check for a Git LFS pointer file)', 4: 'SRC_NOT_SUPPORTED (likely a 404 - check the path/casing)' };
+console.warn('[music] failed to load "' + bgMusic.src + '":', mediaErr ? (codes[mediaErr.code] || mediaErr.code) : 'unknown error');
+});
 function setMusicPlaylist(list) {
 if (activeMusicPlaylist === list) return;
 activeMusicPlaylist = list;
@@ -820,42 +825,91 @@ let scale = 1.0, varSpd = 1.0, varHp = 1.0, isHeavy = false;
 if (variant < 0.20) { scale = 0.85; varSpd = 1.5; varHp = 0.65; }
 else if (variant > 0.85) { scale = 1.3; varSpd = 0.6; varHp = 2.4; isHeavy = true; }
 zGroup.scale.set(scale, scale, scale);
+// Missing-limb roll. Arms: can lose one, never both (needs at least one to attack/crawl with).
+// Legs: can lose one, or both - losing both means it drags itself along the ground instead.
+const armRoll = Math.random();
+const hasLeftArm = !(armRoll < 0.08);
+const hasRightArm = !(armRoll >= 0.08 && armRoll < 0.16);
+const legRoll = Math.random();
+const isCrawler = legRoll < 0.06;
+const hasLeftLeg = !isCrawler && !(legRoll >= 0.06 && legRoll < 0.14);
+const hasRightLeg = !isCrawler && !(legRoll >= 0.14 && legRoll < 0.22);
 const uniformColors = ['#2b302d', '#282b28', '#382f2f', '#1d211d'];
 const mFace = new THREE.MeshLambertMaterial({ map: makeGoreTex('#4f5247', { wounds: 3 + Math.floor(Math.random()*2), bone: Math.random() < 0.6 }) });
 const mUniform = new THREE.MeshLambertMaterial({ map: makeGoreTex(uniformColors[Math.floor(Math.random()*uniformColors.length)], { wounds: 4 + Math.floor(Math.random()*4) }) });
 const mFlesh = new THREE.MeshLambertMaterial({ map: makeGoreTex('#4f5247', { wounds: 3, bone: Math.random() < 0.45 }) });
-const torso = makeOrganicLimb(0.28, 0.22, 0.75, mUniform, 0, true); torso.position.y = 1.0;
+const torso = makeOrganicLimb(0.28, 0.22, 0.75, mUniform, 0, true);
+torso.position.y = isCrawler ? 0.42 : 1.0;
+if (isCrawler) torso.rotation.x = 0.35;
 const neck = makeOrganicLimb(0.09, 0.11, 0.14, mFace, -0.07); neck.position.y = 0.36; torso.add(neck);
 const headGeo = new THREE.SphereGeometry(0.2, 12, 12); headGeo.translate(0, 0.15, 0); mangleGeometry(headGeo, 0.045);
 const head = new THREE.Mesh(headGeo, mFace); head.position.y = 0.46; head.castShadow = true; torso.add(head);
 const jawGeo = new THREE.BoxGeometry(0.12, 0.08, 0.11); mangleGeometry(jawGeo, 0.02);
 const jaw = new THREE.Mesh(jawGeo, mFace); jaw.position.set(0, 0.34, 0.09); jaw.rotation.x = 0.5 + Math.random()*0.3; jaw.castShadow = true; torso.add(jaw);
-function makeLimb(upperLen, lowerLen, upperR, lowerR, endR, mat, bend) {
+// Leaner upper/lower segments than before (slimmer taper) so limbs read as arms/legs
+// rather than blocky tubes; buildEnd swaps in a clawed hand for arms, a rounded foot for legs.
+function makeLimb(upperLen, lowerLen, upperR, lowerR, mat, bend, buildEnd) {
 const g = new THREE.Group();
-const upper = makeOrganicLimb(upperR, upperR*0.8, upperLen, mat, -upperLen/2); g.add(upper);
-const lower = makeOrganicLimb(upperR*0.75, lowerR, lowerLen, mat, -lowerLen/2);
+const upper = makeOrganicLimb(upperR, upperR*0.78, upperLen, mat, -upperLen/2); g.add(upper);
+const lower = makeOrganicLimb(upperR*0.7, lowerR, lowerLen, mat, -lowerLen/2);
 lower.position.y = -upperLen; lower.rotation.x = bend; upper.add(lower);
-const endGeo = new THREE.SphereGeometry(endR, 6, 6); mangleGeometry(endGeo, 0.02);
-const end = new THREE.Mesh(endGeo, mat); end.position.y = -lowerLen; end.castShadow = true; lower.add(end);
-return { group: g, meshes: [upper, lower, end] };
+const endMeshes = buildEnd ? buildEnd(lower, lowerLen, mat) : [];
+return { group: g, meshes: [upper, lower, ...endMeshes] };
 }
-const armL = makeLimb(0.34, 0.34, 0.075, 0.06, 0.07, mFlesh, 0.25 + Math.random()*0.3);
+function buildHandEnd(parent, lowerLen, mat) {
+const palm = makeOrganicLimb(0.06, 0.045, 0.12, mat, -0.06); palm.position.y = -lowerLen; palm.rotation.x = 0.25; parent.add(palm);
+const meshes = [palm];
+[-1, 1].forEach(side => {
+const clawGeo = new THREE.ConeGeometry(0.015, 0.09, 5); clawGeo.translate(0, -0.045, 0); mangleGeometry(clawGeo, 0.008);
+const claw = new THREE.Mesh(clawGeo, mat);
+claw.position.set(side * 0.026, -lowerLen - 0.1, 0.02);
+claw.rotation.x = 0.55; claw.rotation.z = side * 0.2; claw.castShadow = true;
+parent.add(claw); meshes.push(claw);
+});
+return meshes;
+}
+function buildFootEnd(parent, lowerLen, mat, endR) {
+const endGeo = new THREE.SphereGeometry(endR, 6, 6); mangleGeometry(endGeo, 0.02);
+const end = new THREE.Mesh(endGeo, mat); end.position.y = -lowerLen; end.castShadow = true; parent.add(end);
+return [end];
+}
+function addStump(parent, pos, mat, r) {
+const geo = new THREE.SphereGeometry(r, 6, 6); mangleGeometry(geo, 0.035);
+const m = new THREE.Mesh(geo, mat); m.position.set(pos[0], pos[1], pos[2]); m.castShadow = true; parent.add(m);
+return m;
+}
+let armL = null;
+if (hasLeftArm) {
+armL = makeLimb(0.32, 0.32, 0.068, 0.05, mFlesh, 0.25 + Math.random()*0.3, buildHandEnd);
 armL.group.position.set(-0.35, 0.25, 0); torso.add(armL.group);
-const armR = makeLimb(0.34, 0.34, 0.075, 0.06, 0.07, mFlesh, 0.25 + Math.random()*0.3);
+} else addStump(torso, [-0.32, 0.28, 0], mFlesh, 0.09);
+let armR = null;
+if (hasRightArm) {
+armR = makeLimb(0.32, 0.32, 0.068, 0.05, mFlesh, 0.25 + Math.random()*0.3, buildHandEnd);
 armR.group.position.set(0.35, 0.25, 0); torso.add(armR.group);
-const legL = makeLimb(0.42, 0.4, 0.12, 0.09, 0.1, mUniform, 0.1 + Math.random()*0.25);
+} else addStump(torso, [0.32, 0.28, 0], mFlesh, 0.09);
+let legL = null;
+if (hasLeftLeg) {
+legL = makeLimb(0.42, 0.4, 0.12, 0.09, mUniform, 0.1 + Math.random()*0.25, (p, l, m) => buildFootEnd(p, l, m, 0.1));
 legL.group.position.set(-0.15, 0.8, 0); zGroup.add(legL.group);
-const legR = makeLimb(0.42, 0.4, 0.12, 0.09, 0.1, mUniform, 0.1 + Math.random()*0.25);
+} else addStump(zGroup, [-0.15, 0.78, 0], mFlesh, 0.1);
+let legR = null;
+if (hasRightLeg) {
+legR = makeLimb(0.42, 0.4, 0.12, 0.09, mUniform, 0.1 + Math.random()*0.25, (p, l, m) => buildFootEnd(p, l, m, 0.1));
 legR.group.position.set(0.15, 0.8, 0); zGroup.add(legR.group);
+} else addStump(zGroup, [0.15, 0.78, 0], mFlesh, 0.1);
 zGroup.add(torso); scene.add(zGroup);
-const aL = armL.group, aR = armR.group, lL = legL.group, lR = legR.group;
-const animParts = [torso, head, aL, aR, lL, lR];
-const parts = [torso, head, neck, jaw, ...armL.meshes, ...armR.meshes, ...legL.meshes, ...legR.meshes];
+const animParts = { torso, head, aL: armL ? armL.group : null, aR: armR ? armR.group : null, lL: legL ? legL.group : null, lR: legR ? legR.group : null };
+const parts = [torso, head, neck, jaw];
+if (armL) parts.push(...armL.meshes);
+if (armR) parts.push(...armR.meshes);
+if (legL) parts.push(...legL.meshes);
+if (legR) parts.push(...legR.meshes);
 const baseHp = 80 + (currentRound * 18);
 const baseSpeed = 2.0;
 const data = { 
 mesh: zGroup, parts: parts, animParts: animParts, hp: baseHp * hpMult * varHp, 
-isDead: false, speed: baseSpeed * spdMult * varSpd, 
+isDead: false, speed: baseSpeed * spdMult * varSpd * (isCrawler ? 0.55 : 1), isCrawler: isCrawler,
 animTime: Math.random()*10, attackCd: 0, 
 dmg: Math.max(6, (9 + Math.random()*4)*scale * (1 + (currentRound-1)*0.08) * 0.75)
 };
