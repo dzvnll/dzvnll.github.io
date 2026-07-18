@@ -115,17 +115,32 @@ p.sub { font-size: 28px; margin-bottom: 40px; color: #aaa; text-align: center; }
 var MENU_BACKGROUNDS = [
 "https://wallpapers.com/images/hd/zombie-background-r93zbafrbfsrcus1.jpg",
 "https://wallpaperaccess.com/full/2623653.jpg",
-"https://wallpaperaccess.com/full/2623662.jpg",
-"https://placehold.co/1920x1080/000a1a/1155a3?text=BG+4+-+Church",
-"https://placehold.co/1920x1080/0a1a00/3f6600?text=BG+5+-+Streets",
-"https://placehold.co/1920x1080/12001a/5a1166?text=BG+6+-+Bunker"
+"https://wallpaperaccess.com/full/2623662.jpg"
 ];
-var pick = MENU_BACKGROUNDS[Math.floor(Math.random() * MENU_BACKGROUNDS.length)];
 var mm = document.getElementById('mainMenu');
+var SOLID_FALLBACKS = ['#0a0000', '#000000'];
+function applyMenuGradientOnly() {
+var solid = SOLID_FALLBACKS[Math.floor(Math.random() * SOLID_FALLBACKS.length)];
+mm.style.backgroundColor = solid;
+mm.style.backgroundImage = "radial-gradient(ellipse at 30% 60%, rgba(90,0,0,0.35), transparent 60%), radial-gradient(ellipse at center, rgba(20,0,0,0.4) 0%, rgba(0,0,0,0.97) 75%)";
+mm.style.backgroundSize = "cover, cover";
+mm.style.backgroundPosition = "center, center";
+mm.style.backgroundRepeat = "no-repeat, no-repeat";
+}
+if (MENU_BACKGROUNDS.length) {
+var pick = MENU_BACKGROUNDS[Math.floor(Math.random() * MENU_BACKGROUNDS.length)];
+var bgTest = new Image();
+bgTest.onload = function() {
 mm.style.backgroundImage = "url('" + pick + "'), radial-gradient(ellipse at 30% 60%, rgba(90,0,0,0.35), transparent 60%), radial-gradient(ellipse at center, rgba(20,0,0,0.4) 0%, rgba(0,0,0,0.97) 75%)";
 mm.style.backgroundSize = "cover, cover, cover";
 mm.style.backgroundPosition = "center, center, center";
 mm.style.backgroundRepeat = "no-repeat, no-repeat, no-repeat";
+};
+bgTest.onerror = applyMenuGradientOnly;
+bgTest.src = pick;
+} else {
+applyMenuGradientOnly();
+}
 })();
 </script>
 <script>
@@ -333,7 +348,7 @@ let currentGameState = STATES.MENU;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x020202);
 scene.fog = new THREE.FogExp2(0x020202, 0.05);
-const camera = new THREE.PerspectiveCamera(90, window.innerWidth/window.innerHeight, 0.01, 100);
+const camera = new THREE.PerspectiveCamera(120, window.innerWidth/window.innerHeight, 0.01, 100);
 camera.rotation.order = 'YXZ'; camera.position.set(0, 1.6, 4);
 let RES_SCALE = 0.3;
 const renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -450,6 +465,7 @@ const matWall = new THREE.MeshLambertMaterial({ map: makeTex('wall') });
 const matFloor = new THREE.MeshLambertMaterial({ map: makeTex('floor') });
 const matDirt = new THREE.MeshLambertMaterial({ map: makeTex('dirt') });
 const matSkin = new THREE.MeshLambertMaterial({ map: makeGoreTex('#ab8b74', { wounds: 0 }) });
+const matGlove = new THREE.MeshLambertMaterial({ map: makeGoreTex('#2c2620', { wounds: 0 }) });
 const matGunMetal = new THREE.MeshPhongMaterial({ map: makeTex('gunMetal'), shininess: 55, specular: 0x555555 });
 const matGunWood = new THREE.MeshLambertMaterial({ map: makeTex('wood') });
 const matBarrier = new THREE.MeshLambertMaterial({ map: makeTex('barrier') });
@@ -666,8 +682,24 @@ const vmAR = new THREE.Group();
 const vmSMG = new THREE.Group();
 const vmLMG = new THREE.Group();
 const vmMagnum = new THREE.Group();
-const hForeR = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 0.52), matSkin); hForeR.position.set(0.32, -0.26, -0.18); vmHands.add(hForeR);
-const hRight = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.32), matSkin); hRight.position.set(0.32, -0.24, -0.42); vmHands.add(hRight);
+function armSegment(w, h, d, mat, segs) {
+const geo = new THREE.BoxGeometry(w, h, d, segs || 3, segs || 3, segs || 3); mangleGeometry(geo, 0.02);
+const m = new THREE.Mesh(geo, mat); m.castShadow = false; return m;
+}
+// Right arm: sleeve running down to a gloved trigger hand, built from several overlapping
+// tapered segments instead of one flat box so it reads as a rounded limb, not a slab.
+const rSleeve = armSegment(0.16, 0.16, 0.30, matPlayerCloth); rSleeve.position.set(0.33, -0.27, -0.06); vmHands.add(rSleeve);
+const rForearm = armSegment(0.135, 0.13, 0.28, matSkin); rForearm.position.set(0.325, -0.265, -0.28); vmHands.add(rForearm);
+const rWrist = armSegment(0.115, 0.11, 0.12, matGlove); rWrist.position.set(0.32, -0.25, -0.46); vmHands.add(rWrist);
+const rHand = armSegment(0.11, 0.095, 0.20, matGlove); rHand.position.set(0.315, -0.235, -0.56); vmHands.add(rHand);
+const rThumb = armSegment(0.035, 0.035, 0.1, matGlove, 2); rThumb.position.set(0.26, -0.20, -0.52); rThumb.rotation.z = 0.5; vmHands.add(rThumb);
+// Left arm: support hand reaching forward under the barrel/foregrip, crossing under the
+// right arm the way a two-handed grip looks in first person.
+const lSleeve = armSegment(0.17, 0.17, 0.28, matPlayerCloth); lSleeve.position.set(-0.06, -0.34, -0.08); vmHands.add(lSleeve);
+const lForearm = armSegment(0.145, 0.14, 0.30, matSkin); lForearm.position.set(-0.01, -0.325, -0.30); vmHands.add(lForearm);
+const lWrist = armSegment(0.125, 0.12, 0.12, matGlove); lWrist.position.set(0.03, -0.305, -0.50); vmHands.add(lWrist);
+const lHand = armSegment(0.12, 0.10, 0.20, matGlove); lHand.position.set(0.06, -0.285, -0.62); vmHands.add(lHand);
+const lThumb = armSegment(0.035, 0.035, 0.1, matGlove, 2); lThumb.position.set(0.12, -0.24, -0.58); lThumb.rotation.z = -0.4; vmHands.add(lThumb);
 const pSlide = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.22), matGunMetal); pSlide.position.set(0.22, -0.21, -0.45); vmPistol.add(pSlide);
 const pGrip = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.11, 0.05), matGunMetal); pGrip.position.set(0.22, -0.27, -0.38); pGrip.rotation.x = 0.2; vmPistol.add(pGrip);
 const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 1.0), matGunMetal); barrel.position.set(0.25, -0.22, -0.6); vmShotgun.add(barrel);
@@ -712,17 +744,21 @@ flash.position.set(0.30, -0.22, -0.56); flash.visible = false; viewmodel.add(fla
 const muzzleLight = new THREE.PointLight(0xffaa33, 0, 6); muzzleLight.position.set(0.30, -0.22, -0.56); viewmodel.add(muzzleLight);
 viewmodel.add(vmHands); viewmodel.add(vmPistol); viewmodel.add(vmShotgun); viewmodel.add(vmAR);
 viewmodel.add(vmSMG); viewmodel.add(vmLMG); viewmodel.add(vmMagnum);
+viewmodel.scale.set(1.3, 1.3, 1.3);
 camera.add(viewmodel); scene.add(camera);
 const playerBody = new THREE.Group(); scene.add(playerBody);
 function bodyPart(w, h, d, mat) {
 const geo = new THREE.BoxGeometry(w, h, d, 2, 2, 2); mangleGeometry(geo, 0.015);
 const m = new THREE.Mesh(geo, mat); return m;
 }
-const pTorso = bodyPart(0.46, 0.62, 0.28, matPlayerCloth); pTorso.position.set(0, 1.1, -0.1); playerBody.add(pTorso);
-const pShoulderR = bodyPart(0.16, 0.16, 0.16, matPlayerCloth); pShoulderR.position.set(0.28, 1.3, -0.1); playerBody.add(pShoulderR);
-const pArmR = bodyPart(0.13, 0.5, 0.15, matSkin); pArmR.position.set(0.3, 0.9, -0.1); pArmR.rotation.x = 0.35; playerBody.add(pArmR);
-const pLegL = bodyPart(0.19, 0.92, 0.22, matPlayerCloth); pLegL.position.set(-0.13, 0.48, -0.1); playerBody.add(pLegL);
-const pLegR = bodyPart(0.19, 0.92, 0.22, matPlayerCloth); pLegR.position.set(0.13, 0.48, -0.1); playerBody.add(pLegR);
+// Full organic-mesh body (same tapered-cylinder technique used for the zombies) instead of
+// flat boxes, so looking down shows a rounded torso/limbs rather than chunky slabs.
+const pTorso = makeOrganicLimb(0.27, 0.20, 0.62, matPlayerCloth, 0, true); pTorso.position.set(0, 1.15, -0.05); playerBody.add(pTorso);
+const pShoulderR = makeOrganicLimb(0.11, 0.09, 0.16, matPlayerCloth, 0); pShoulderR.position.set(0.27, 1.35, -0.05); playerBody.add(pShoulderR);
+const pArmRUpper = makeOrganicLimb(0.085, 0.075, 0.42, matPlayerCloth, -0.21); pArmRUpper.position.set(0.30, 1.28, -0.05); pArmRUpper.rotation.x = 0.4; playerBody.add(pArmRUpper);
+const pArmRLower = makeOrganicLimb(0.075, 0.065, 0.38, matSkin, -0.19); pArmRLower.position.set(0.34, 0.90, 0.05); pArmRLower.rotation.x = 0.15; playerBody.add(pArmRLower);
+const pLegL = makeOrganicLimb(0.155, 0.115, 0.90, matPlayerCloth, -0.45); pLegL.position.set(-0.14, 0.94, -0.05); playerBody.add(pLegL);
+const pLegR = makeOrganicLimb(0.155, 0.115, 0.90, matPlayerCloth, -0.45); pLegR.position.set(0.14, 0.94, -0.05); playerBody.add(pLegR);
 const bloodParticles = [];
 function spawnBlood(pos, count = 6, spread = 2.5) {
 for (let i = 0; i < count; i++) {
@@ -823,7 +859,7 @@ maybeShowMysteryBox();
 zombiesToSpawn = Math.floor(5 + Math.pow(currentRound, 1.15) * 1.8); 
 zombiesAlive = zombiesToSpawn;
 }
-let playerHP = 100; const MAX_HP = 100; let lastHitTime = 0;
+let playerHP = 110; const MAX_HP = 110; let lastHitTime = 0;
 const ZOMBIE_ATTACK_GRACE_MS = 10000; let zombieAttacksDisabledUntil = 0;
 function updateHpBar() { document.getElementById('hpFill').style.width = Math.max(0, playerHP) + '%'; }
 function damagePlayer(amount) {
@@ -857,7 +893,7 @@ switchWeapon(1);
 document.getElementById('points').innerText = pts;
 updateHpBar();
 camera.position.set(0, 1.6, 4); yaw = 0; pitch = 0; camera.rotation.set(0, 0, 0);
-isAiming = false; camera.fov = 90; camera.updateProjectionMatrix();
+isAiming = false; camera.fov = 120; camera.updateProjectionMatrix();
 }
 let yaw = 0, pitch = 0; const keys = {};
 let isAiming = false;
@@ -989,14 +1025,14 @@ if (currentGameState === STATES.PLAYING && document.pointerLockElement !== docum
 document.addEventListener('mousedown', e => {
 if (e.button === 2 && currentGameState === STATES.PLAYING && equipped !== 0) {
 isAiming = true;
-camera.fov = 55;
+camera.fov = 73;
 camera.updateProjectionMatrix();
 }
 });
 document.addEventListener('mouseup', e => {
 if (e.button === 2 && currentGameState === STATES.PLAYING) {
 isAiming = false;
-camera.fov = 90;
+camera.fov = 120;
 camera.updateProjectionMatrix();
 }
 });
@@ -1017,7 +1053,8 @@ const VM_GROUPS = { 0: vmHands, 1: vmPistol, 2: vmShotgun, 3: vmAR, 4: vmSMG, 5:
 function switchWeapon(id) {
 if (isReloading || (id !== 0 && !guns[id].unlocked)) return;
 equipped = id;
-for (let k in VM_GROUPS) VM_GROUPS[k].visible = (parseInt(k) === id);
+for (let k in VM_GROUPS) { if (k === '0') continue; VM_GROUPS[k].visible = (parseInt(k) === id); }
+vmHands.visible = true;
 document.getElementById('ammo').style.display = id !== 0 ? 'block' : 'none';
 if (currentGameState === STATES.PLAYING) document.getElementById('crosshair').style.display = id !== 0 ? 'block' : 'none';
 updateAmmoUI();
