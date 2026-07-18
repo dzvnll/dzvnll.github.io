@@ -740,7 +740,7 @@ const lForearm = armSegment(0.14, 0.13, 0.32, matSkin); lForearm.position.set(-0
 const lHand = armSegment(0.12, 0.10, 0.22, matGlove); lHand.position.set(0.05, -0.29, -0.60); vmLeftArm.add(lHand);
 vmHands.add(vmRightArm); vmHands.add(vmLeftArm);
 vmLeftArm.visible = false;
-const pSlide = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.22), matGunMetal); pSlide.position.set(0.22, -0.21, -0.45); vmPistol.add(pSlide);
+const pSlide = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.22), matGunMetal); pSlide.position.set(0.22, -0.16, -0.45); vmPistol.add(pSlide);
 const pGrip = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.11, 0.05), matGunMetal); pGrip.position.set(0.22, -0.27, -0.38); pGrip.rotation.x = 0.2; vmPistol.add(pGrip);
 const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 1.0), matGunMetal); barrel.position.set(0.25, -0.22, -0.6); vmShotgun.add(barrel);
 const magTube = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.8), matGunMetal); magTube.position.set(0.25, -0.26, -0.5); vmShotgun.add(magTube);
@@ -750,7 +750,7 @@ const stock = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.14, 0.35), matGunWood
 const arBody = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.6), matGunMetal); arBody.position.set(0.25, -0.25, -0.3); vmAR.add(arBody);
 const arMag = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.19, 0.1), matGunMetal); arMag.position.set(0.25, -0.38, -0.2); arMag.rotation.x = -0.15; vmAR.add(arMag);
 const arBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.5), matGunMetal); arBarrel.position.set(0.25, -0.22, -0.8); vmAR.add(arBarrel);
-const arStock = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, 0.28), matGunMetal); arStock.position.set(0.25, -0.25, 0.15); vmAR.add(arStock);
+const arStock = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, 0.28), matGunMetal); arStock.position.set(0.25, -0.25, -0.05); vmAR.add(arStock);
 const smgBody = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.11, 0.42), matGunMetal); smgBody.position.set(0.25, -0.24, -0.2); vmSMG.add(smgBody);
 const smgMag = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.24, 0.06), matGunMetal); smgMag.position.set(0.25, -0.4, -0.15); smgMag.rotation.x = -0.2; vmSMG.add(smgMag);
 const smgBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, 0.3), matGunMetal); smgBarrel.position.set(0.25, -0.21, -0.55); vmSMG.add(smgBarrel);
@@ -760,7 +760,7 @@ const lmgDrum = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.06, 10),
 const lmgBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.55), matGunMetal); lmgBarrel.position.set(0.26, -0.21, -0.9); vmLMG.add(lmgBarrel);
 const lmgBipodL = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.18, 0.02), matGunMetal); lmgBipodL.position.set(0.19, -0.32, -0.75); lmgBipodL.rotation.z = 0.25; vmLMG.add(lmgBipodL);
 const lmgBipodR = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.18, 0.02), matGunMetal); lmgBipodR.position.set(0.33, -0.32, -0.75); lmgBipodR.rotation.z = -0.25; vmLMG.add(lmgBipodR);
-const lmgStock = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.3), matGunWood); lmgStock.position.set(0.26, -0.27, 0.15); vmLMG.add(lmgStock);
+const lmgStock = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.3), matGunWood); lmgStock.position.set(0.26, -0.27, -0.05); vmLMG.add(lmgStock);
 const magBody = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.09, 0.14), matGunMetal); magBody.position.set(0.22, -0.22, -0.3); vmMagnum.add(magBody);
 const magCylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.06, 10), matGunMetal); magCylinder.rotation.z = Math.PI/2; magCylinder.position.set(0.22, -0.22, -0.24); vmMagnum.add(magCylinder);
 const magBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.4), matGunMetal); magBarrel.position.set(0.22, -0.22, -0.55); vmMagnum.add(magBarrel);
@@ -1333,8 +1333,8 @@ function fireGun() {
 if (isReloading || guns[equipped].ammo <= 0) { if (guns[equipped].ammo === 0) initiateReload(); return; }
 guns[equipped].ammo--; updateAmmoUI();
 playShot(guns[equipped].sound); pitch += isAiming ? guns[equipped].recoil * 0.5 : guns[equipped].recoil;
-viewmodel.position.z += isAiming ? 0.08 : 0.18;
-setTimeout(() => { viewmodel.position.z -= isAiming ? 0.08 : 0.18; }, 100);
+viewmodel.position.z += isAiming ? 0.03 : 0.06;
+setTimeout(() => { viewmodel.position.z -= isAiming ? 0.03 : 0.06; }, 100);
 const mz = MUZZLE_LOCAL[equipped] || MUZZLE_LOCAL[1];
 const mzGrp = VM_GROUPS[equipped].position;
 flash.position.set(mzGrp.x + mz.x, mzGrp.y + mz.y, mzGrp.z + mz.z);
