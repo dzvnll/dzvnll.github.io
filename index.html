@@ -838,16 +838,25 @@ const uniformColors = ['#2b302d', '#282b28', '#382f2f', '#1d211d'];
 const mFace = new THREE.MeshLambertMaterial({ map: makeGoreTex('#4f5247', { wounds: 3 + Math.floor(Math.random()*2), bone: Math.random() < 0.6 }) });
 const mUniform = new THREE.MeshLambertMaterial({ map: makeGoreTex(uniformColors[Math.floor(Math.random()*uniformColors.length)], { wounds: 4 + Math.floor(Math.random()*4) }) });
 const mFlesh = new THREE.MeshLambertMaterial({ map: makeGoreTex('#4f5247', { wounds: 3, bone: Math.random() < 0.45 }) });
-const torso = makeOrganicLimb(0.28, 0.22, 0.75, mUniform, 0, true);
-torso.position.y = isCrawler ? 0.42 : 1.0;
+const torsoBaseY = isCrawler ? 0.42 : 1.0;
+const torso = makeOrganicLimb(0.26, 0.2, 0.62, mUniform, 0, true);
+torso.position.y = torsoBaseY;
 if (isCrawler) torso.rotation.x = 0.35;
-const neck = makeOrganicLimb(0.09, 0.11, 0.14, mFace, -0.07); neck.position.y = 0.36; torso.add(neck);
-const headGeo = new THREE.SphereGeometry(0.2, 12, 12); headGeo.translate(0, 0.15, 0); mangleGeometry(headGeo, 0.045);
-const head = new THREE.Mesh(headGeo, mFace); head.position.y = 0.46; head.castShadow = true; torso.add(head);
-const jawGeo = new THREE.BoxGeometry(0.12, 0.08, 0.11); mangleGeometry(jawGeo, 0.02);
-const jaw = new THREE.Mesh(jawGeo, mFace); jaw.position.set(0, 0.34, 0.09); jaw.rotation.x = 0.5 + Math.random()*0.3; jaw.castShadow = true; torso.add(jaw);
-// Leaner upper/lower segments than before (slimmer taper) so limbs read as arms/legs
-// rather than blocky tubes; buildEnd swaps in a clawed hand for arms, a rounded foot for legs.
+// Chest tapers into a narrower waist/pelvis wedge so the silhouette reads as a torso
+// rather than a single tube - this is where the hip sockets and legs anchor.
+const pelvisGeo = new THREE.CylinderGeometry(0.2, 0.16, 0.22, 10, 3); pelvisGeo.translate(0, -0.28, 0);
+mangleGeometry(pelvisGeo, 0.05);
+const pelvis = new THREE.Mesh(pelvisGeo, mUniform); pelvis.castShadow = true; pelvis.receiveShadow = true; torso.add(pelvis);
+const shoulderGeo = new THREE.CylinderGeometry(0.3, 0.27, 0.13, 10, 2); shoulderGeo.translate(0, 0.24, 0);
+mangleGeometry(shoulderGeo, 0.04);
+const shoulders = new THREE.Mesh(shoulderGeo, mUniform); shoulders.castShadow = true; shoulders.receiveShadow = true; torso.add(shoulders);
+const neck = makeOrganicLimb(0.075, 0.095, 0.13, mFace, -0.07); neck.position.y = 0.34; torso.add(neck);
+const headGeo = new THREE.SphereGeometry(0.19, 14, 14); headGeo.scale(0.92, 1.08, 0.95); headGeo.translate(0, 0.15, 0); mangleGeometry(headGeo, 0.04);
+const head = new THREE.Mesh(headGeo, mFace); head.position.y = 0.44; head.castShadow = true; torso.add(head);
+const jawGeo = new THREE.BoxGeometry(0.11, 0.07, 0.1); mangleGeometry(jawGeo, 0.015);
+const jaw = new THREE.Mesh(jawGeo, mFace); jaw.position.set(0, 0.32, 0.09); jaw.rotation.x = 0.5 + Math.random()*0.3; jaw.castShadow = true; torso.add(jaw);
+// Leaner upper/lower segments (slimmer taper) so limbs read as arms/legs rather than
+// blocky tubes; buildEnd swaps in a clawed hand for arms, a rounded foot for legs.
 function makeLimb(upperLen, lowerLen, upperR, lowerR, mat, bend, buildEnd) {
 const g = new THREE.Group();
 const upper = makeOrganicLimb(upperR, upperR*0.78, upperLen, mat, -upperLen/2); g.add(upper);
@@ -873,31 +882,42 @@ const endGeo = new THREE.SphereGeometry(endR, 6, 6); mangleGeometry(endGeo, 0.02
 const end = new THREE.Mesh(endGeo, mat); end.position.y = -lowerLen; end.castShadow = true; parent.add(end);
 return [end];
 }
-function addStump(parent, pos, mat, r) {
-const geo = new THREE.SphereGeometry(r, 6, 6); mangleGeometry(geo, 0.035);
+// Every socket (both shoulders, both hips) always gets a joint ball. When a limb is
+// attached it mostly hides behind the limb; when a limb is missing (at spawn, or shot
+// off mid-fight) that same ball reads as the bloody stump - no separate stump mesh needed.
+function addSocket(parent, pos, mat, r) {
+const geo = new THREE.SphereGeometry(r, 8, 7); mangleGeometry(geo, 0.03);
 const m = new THREE.Mesh(geo, mat); m.position.set(pos[0], pos[1], pos[2]); m.castShadow = true; parent.add(m);
 return m;
 }
+const SHOULDER_L = [-0.37, 0.26, 0], SHOULDER_R = [0.37, 0.26, 0];
+const HIP_L = [-0.16, 0.8, 0], HIP_R = [0.16, 0.8, 0];
+addSocket(torso, SHOULDER_L, mFlesh, 0.1); addSocket(torso, SHOULDER_R, mFlesh, 0.1);
+addSocket(zGroup, HIP_L, mFlesh, 0.11); addSocket(zGroup, HIP_R, mFlesh, 0.11);
 let armL = null;
 if (hasLeftArm) {
 armL = makeLimb(0.32, 0.32, 0.068, 0.05, mFlesh, 0.25 + Math.random()*0.3, buildHandEnd);
-armL.group.position.set(-0.35, 0.25, 0); torso.add(armL.group);
-} else addStump(torso, [-0.32, 0.28, 0], mFlesh, 0.09);
+armL.group.position.set(SHOULDER_L[0], SHOULDER_L[1] - 0.01, SHOULDER_L[2]); torso.add(armL.group);
+armL.meshes.forEach(m => m.userData.limb = 'aL');
+}
 let armR = null;
 if (hasRightArm) {
 armR = makeLimb(0.32, 0.32, 0.068, 0.05, mFlesh, 0.25 + Math.random()*0.3, buildHandEnd);
-armR.group.position.set(0.35, 0.25, 0); torso.add(armR.group);
-} else addStump(torso, [0.32, 0.28, 0], mFlesh, 0.09);
+armR.group.position.set(SHOULDER_R[0], SHOULDER_R[1] - 0.01, SHOULDER_R[2]); torso.add(armR.group);
+armR.meshes.forEach(m => m.userData.limb = 'aR');
+}
 let legL = null;
 if (hasLeftLeg) {
 legL = makeLimb(0.42, 0.4, 0.12, 0.09, mUniform, 0.1 + Math.random()*0.25, (p, l, m) => buildFootEnd(p, l, m, 0.1));
-legL.group.position.set(-0.15, 0.8, 0); zGroup.add(legL.group);
-} else addStump(zGroup, [-0.15, 0.78, 0], mFlesh, 0.1);
+legL.group.position.set(HIP_L[0], HIP_L[1], HIP_L[2]); zGroup.add(legL.group);
+legL.meshes.forEach(m => m.userData.limb = 'lL');
+}
 let legR = null;
 if (hasRightLeg) {
 legR = makeLimb(0.42, 0.4, 0.12, 0.09, mUniform, 0.1 + Math.random()*0.25, (p, l, m) => buildFootEnd(p, l, m, 0.1));
-legR.group.position.set(0.15, 0.8, 0); zGroup.add(legR.group);
-} else addStump(zGroup, [0.15, 0.78, 0], mFlesh, 0.1);
+legR.group.position.set(HIP_R[0], HIP_R[1], HIP_R[2]); zGroup.add(legR.group);
+legR.meshes.forEach(m => m.userData.limb = 'lR');
+}
 zGroup.add(torso); scene.add(zGroup);
 const animParts = { torso, head, aL: armL ? armL.group : null, aR: armR ? armR.group : null, lL: legL ? legL.group : null, lR: legR ? legR.group : null };
 const parts = [torso, head, neck, jaw];
@@ -911,7 +931,17 @@ const data = {
 mesh: zGroup, parts: parts, animParts: animParts, hp: baseHp * hpMult * varHp, 
 isDead: false, speed: baseSpeed * spdMult * varSpd * (isCrawler ? 0.55 : 1), isCrawler: isCrawler,
 animTime: Math.random()*10, attackCd: 0, 
-dmg: Math.max(6, (9 + Math.random()*4)*scale * (1 + (currentRound-1)*0.08) * 0.75)
+dmg: Math.max(6, (9 + Math.random()*4)*scale * (1 + (currentRound-1)*0.08) * 0.75),
+torsoBaseY: torsoBaseY,
+// Which limbs are currently attached, and (for the ones that started attached) what
+// they're parented to and which meshes belong to them - needed to sever one on the fly.
+limbs: { aL: hasLeftArm, aR: hasRightArm, lL: hasLeftLeg, lR: hasRightLeg },
+limbInfo: {
+aL: armL ? { parent: torso, group: armL.group, meshes: armL.meshes } : null,
+aR: armR ? { parent: torso, group: armR.group, meshes: armR.meshes } : null,
+lL: legL ? { parent: zGroup, group: legL.group, meshes: legL.meshes } : null,
+lR: legR ? { parent: zGroup, group: legR.group, meshes: legR.meshes } : null
+}
 };
 zombies.push(data);
 parts.forEach(p => { p.userData.zData = data; targets.push(p); });
@@ -1161,12 +1191,39 @@ const hm = document.getElementById('hitmarker');
 hm.style.color = kill ? '#ffcc00' : '#fff'; hm.style.opacity = 1;
 clearTimeout(hm._t); hm._t = setTimeout(() => hm.style.opacity = 0, 110);
 }
-function applyDamageToZombie(zData, dmg, hitPoint) {
+// Removes an attached limb (arm or leg), leaving its shoulder/hip socket ball exposed as
+// a bloody stump. Safe to call on a limb that's already missing (spawned without it, or
+// already shot off) - it just does nothing.
+function severLimb(zData, limbKey, hitPoint) {
+if (!zData.limbs[limbKey]) return;
+const info = zData.limbInfo[limbKey];
+if (!info) return;
+info.parent.remove(info.group);
+for (const mesh of info.meshes) {
+const pIdx = zData.parts.indexOf(mesh); if (pIdx !== -1) zData.parts.splice(pIdx, 1);
+const tIdx = targets.indexOf(mesh); if (tIdx !== -1) targets.splice(tIdx, 1);
+mesh.geometry.dispose();
+}
+zData.limbs[limbKey] = false;
+zData.animParts[limbKey] = null;
+spawnBlood(hitPoint || zData.mesh.position.clone().setY(zData.torsoBaseY), 10, 2.8);
+// Losing both legs drops the zombie into a crawl - same posture/speed a zombie that
+// spawned legless already uses.
+if (!zData.limbs.lL && !zData.limbs.lR && !zData.isCrawler) {
+zData.isCrawler = true; zData.speed *= 0.55; zData.torsoBaseY = 0.42;
+zData.animParts.torso.rotation.x = 0.35;
+}
+}
+function applyDamageToZombie(zData, dmg, hitPoint, limbHit) {
 if (!zData || zData.isDead) return;
 zData.hp -= dmg; pts += 10; document.getElementById('points').innerText = pts;
 if (hitPoint) spawnBlood(hitPoint, 5, 2.2);
 zData.parts.forEach(p => { p.material.color.setHex(0xff0000); });
 setTimeout(() => { if (!zData.isDead) zData.parts.forEach(p => { p.material.color.setHex(0xffffff); }); }, 100);
+if (limbHit && zData.limbs[limbHit]) {
+const severChance = Math.min(0.9, 0.1 + dmg * 0.006);
+if (Math.random() < severChance) severLimb(zData, limbHit, hitPoint);
+}
 if (zData.hp <= 0) {
 zData.isDead = true; pts += 60; document.getElementById('points').innerText = pts;
 zData.parts.forEach(p => { p.material.color.setHex(0x330000); });
@@ -1200,16 +1257,20 @@ const spread = isAiming ? 0.002 : ((equipped === 1) ? 0.005 : ((equipped === 3) 
 raycaster.setFromCamera({ x: (Math.random()-0.5)*spread, y: (Math.random()-0.5)*spread }, camera);
 const hits = raycaster.intersectObjects(targets);
 if (hits.length > 0) {
-const zData = hits[0].object.userData.zData;
+const hitObj = hits[0].object; const zData = hitObj.userData.zData;
 if (zData && !zData.isDead) {
-hitTotals.set(zData, (hitTotals.get(zData) || { dmg: 0, point: hits[0].point }));
-hitTotals.get(zData).dmg += PELLET_DAMAGE;
+if (!hitTotals.has(zData)) hitTotals.set(zData, { dmg: 0, point: hits[0].point, limbHits: {} });
+const info = hitTotals.get(zData); info.dmg += PELLET_DAMAGE;
+const limb = hitObj.userData.limb;
+if (limb) info.limbHits[limb] = (info.limbHits[limb] || 0) + 1;
 }
 }
 }
 hitTotals.forEach((info, zData) => {
 zData.mesh.translateZ(guns[equipped].auto ? -0.1 : -0.4);
-applyDamageToZombie(zData, info.dmg, info.point);
+let topLimb = null, topCount = 0;
+for (const k in info.limbHits) { if (info.limbHits[k] > topCount) { topLimb = k; topCount = info.limbHits[k]; } }
+applyDamageToZombie(zData, info.dmg, info.point, topLimb);
 });
 fireCooldown = guns[equipped].cooldown;
 }
@@ -1325,7 +1386,7 @@ playThud(300); raycaster.setFromCamera({ x: 0, y: 0 }, camera);
 const hits = raycaster.intersectObjects(targets);
 if (hits.length > 0 && hits[0].distance < 2.2) {
 const zData = hits[0].object.userData.zData;
-if (zData && !zData.isDead) { zData.mesh.translateZ(-0.2); applyDamageToZombie(zData, 60, hits[0].point); }
+if (zData && !zData.isDead) { zData.mesh.translateZ(-0.2); applyDamageToZombie(zData, 60, hits[0].point, hits[0].object.userData.limb); }
 }
 fireCooldown = 0.4;
 }
@@ -1392,7 +1453,7 @@ if (!checkCol(mesh.position.x, mesh.position.z + sz)) mesh.position.z += sz;
 z.animTime += dt * (12 * (z.speed/2.1));
 if (lL) lL.rotation.x = Math.sin(z.animTime) * 1.0; if (lR) lR.rotation.x = Math.sin(z.animTime + Math.PI) * 1.0;
 if (aL) aL.rotation.x = -Math.PI/2 + 0.2 + Math.sin(z.animTime*0.5)*0.1; if (aR) aR.rotation.x = -Math.PI/2 + 0.2 + Math.sin(z.animTime*0.5 + Math.PI)*0.1;
-torso.position.y = 1.0 + Math.abs(Math.sin(z.animTime)) * 0.15; torso.rotation.z = Math.sin(z.animTime*0.5) * 0.1;
+torso.position.y = z.torsoBaseY + Math.abs(Math.sin(z.animTime)) * 0.15; torso.rotation.z = Math.sin(z.animTime*0.5) * 0.1;
 } else {
 mesh.lookAt(px, 0, pz); z.animTime += dt * 8;
 if (aL) aL.rotation.x = -Math.PI/2 + Math.sin(z.animTime) * 0.6; if (aR) aR.rotation.x = -Math.PI/2 + Math.sin(z.animTime + Math.PI) * 0.6;
